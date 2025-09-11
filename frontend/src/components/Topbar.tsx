@@ -5,11 +5,12 @@ import SignInOAuthButtons from "./SignInOAuthButtons";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "./ui/button";
-import Searchbar from "./ui/Searchbar";
+import Searchbar from "./Searchbar";
 
+// Make the search props optional by adding '?'
 type TopbarProps = {
-	searchQuery: string;
-	setSearchQuery: (query: string) => void;
+	searchQuery?: string;
+	setSearchQuery?: (query: string) => void;
 };
 
 const Topbar = ({ searchQuery, setSearchQuery }: TopbarProps) => {
@@ -28,7 +29,10 @@ const Topbar = ({ searchQuery, setSearchQuery }: TopbarProps) => {
 				<span className='hidden sm:inline'>Spotify</span>
 			</div>
 
-			{isHomePage && <Searchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />}
+			{/* Conditionally render the search bar only if props are provided and it's the home page */}
+			{isHomePage && searchQuery !== undefined && setSearchQuery && (
+				<Searchbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
+			)}
 
 			<div className='flex items-center gap-4'>
 				{isAdmin && (
