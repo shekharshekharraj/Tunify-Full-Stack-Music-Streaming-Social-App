@@ -1,4 +1,4 @@
-# Spotify Clone - Full-Stack Music Streaming & Social App
+# Tunify - Full-Stack Music Streaming & Social App
 
 A feature-rich, full-stack music streaming application inspired by Spotify. This project combines a seamless audio playback experience with real-time social features, allowing users to listen to music, see their friends' activity, and chat one-on-one. It also includes a complete administrative backend for managing the music catalog.
 
