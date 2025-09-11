@@ -13,6 +13,7 @@ interface ChatStore {
 	userActivities: Map<string, string>;
 	messages: Message[];
 	selectedUser: User | null;
+	unreadCounts: Map<string, number>; // clerkId -> count
 
 	fetchUsers: () => Promise<void>;
 	initSocket: (userId: string) => void;
@@ -20,12 +21,13 @@ interface ChatStore {
 	sendMessage: (receiverId: string, senderId: string, content: string) => void;
 	fetchMessages: (userId: string) => Promise<void>;
 	setSelectedUser: (user: User | null) => void;
+	resetUnreadCount: (userId: string) => void;
 }
 
 const baseURL = import.meta.env.MODE === "development" ? "http://localhost:5000" : "/";
 
 const socket = io(baseURL, {
-	autoConnect: false, // only connect if user is authenticated
+	autoConnect: false,
 	withCredentials: true,
 });
 
@@ -39,8 +41,22 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 	userActivities: new Map(),
 	messages: [],
 	selectedUser: null,
+	unreadCounts: new Map(),
 
-	setSelectedUser: (user) => set({ selectedUser: user }),
+	setSelectedUser: (user) => {
+		if (user) {
+			get().resetUnreadCount(user.clerkId);
+		}
+		set({ selectedUser: user });
+	},
+
+	resetUnreadCount: (userId) => {
+		set((state) => {
+			const newCounts = new Map(state.unreadCounts);
+			newCounts.set(userId, 0);
+			return { unreadCounts: newCounts };
+		});
+	},
 
 	fetchUsers: async () => {
 		set({ isLoading: true, error: null });
@@ -61,19 +77,9 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 
 			socket.emit("user_connected", userId);
 
-			socket.on("users_online", (users: string[]) => {
-				set({ onlineUsers: new Set(users) });
-			});
-
-			socket.on("activities", (activities: [string, string][]) => {
-				set({ userActivities: new Map(activities) });
-			});
-
-			socket.on("user_connected", (userId: string) => {
-				set((state) => ({
-					onlineUsers: new Set([...state.onlineUsers, userId]),
-				}));
-			});
+			socket.on("users_online", (users: string[]) => set({ onlineUsers: new Set(users) }));
+			socket.on("activities", (activities: [string, string][]) => set({ userActivities: new Map(activities) }));
+			socket.on("user_connected", (userId: string) => set((state) => ({ onlineUsers: new Set([...state.onlineUsers, userId]) })));
 
 			socket.on("user_disconnected", (userId: string) => {
 				set((state) => {
@@ -83,17 +89,23 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 				});
 			});
 
+			// Unified listener for incoming messages
 			socket.on("receive_message", (message: Message) => {
-				set((state) => ({
-					messages: [...state.messages, message],
-				}));
+				// If the chat for the sender is currently open, append the message to the view
+				if (get().selectedUser?.clerkId === message.senderId) {
+					set((state) => ({ messages: [...state.messages, message] }));
+				} else {
+					// Otherwise, increment the unread count for that sender
+					set((state) => {
+						const newCounts = new Map(state.unreadCounts);
+						const currentCount = newCounts.get(message.senderId) || 0;
+						newCounts.set(message.senderId, currentCount + 1);
+						return { unreadCounts: newCounts };
+					});
+				}
 			});
 
-			socket.on("message_sent", (message: Message) => {
-				set((state) => ({
-					messages: [...state.messages, message],
-				}));
-			});
+			socket.on("message_sent", (message: Message) => set((state) => ({ messages: [...state.messages, message] })));
 
 			socket.on("activity_updated", ({ userId, activity }) => {
 				set((state) => {
@@ -115,10 +127,7 @@ export const useChatStore = create<ChatStore>((set, get) => ({
 	},
 
 	sendMessage: async (receiverId, senderId, content) => {
-		const socket = get().socket;
-		if (!socket) return;
-
-		socket.emit("send_message", { receiverId, senderId, content });
+		get().socket?.emit("send_message", { receiverId, senderId, content });
 	},
 
 	fetchMessages: async (userId: string) => {

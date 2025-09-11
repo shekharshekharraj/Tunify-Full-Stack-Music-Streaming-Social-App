@@ -1,12 +1,15 @@
 import Topbar from "@/components/Topbar";
 import { useMusicStore } from "@/stores/useMusicStore";
-import { useEffect } from "react";
+import { useEffect, useMemo, useState } from "react";
 import FeaturedSection from "./components/FeaturedSection";
 import { ScrollArea } from "@/components/ui/scroll-area";
 import SectionGrid from "./components/SectionGrid";
 import { usePlayerStore } from "@/stores/usePlayerStore";
+import { Song } from "@/types";
+import SearchResults from "./components/SearchResults";
 
 const HomePage = () => {
+	const [searchQuery, setSearchQuery] = useState("");
 	const {
 		fetchFeaturedSongs,
 		fetchMadeForYouSongs,
@@ -25,25 +28,52 @@ const HomePage = () => {
 		fetchTrendingSongs();
 	}, [fetchFeaturedSongs, fetchMadeForYouSongs, fetchTrendingSongs]);
 
+	const allSongs = useMemo(() => {
+		// Combine all songs and remove duplicates
+		const songMap = new Map<string, Song>();
+		[...featuredSongs, ...madeForYouSongs, ...trendingSongs].forEach((song) => {
+			if (!songMap.has(song._id)) {
+				songMap.set(song._id, song);
+			}
+		});
+		return Array.from(songMap.values());
+	}, [featuredSongs, madeForYouSongs, trendingSongs]);
+
 	useEffect(() => {
-		if (madeForYouSongs.length > 0 && featuredSongs.length > 0 && trendingSongs.length > 0) {
-			const allSongs = [...featuredSongs, ...madeForYouSongs, ...trendingSongs];
+		if (allSongs.length > 0) {
 			initializeQueue(allSongs);
 		}
-	}, [initializeQueue, madeForYouSongs, trendingSongs, featuredSongs]);
+	}, [initializeQueue, allSongs]);
+
+	const filteredSongs = useMemo(() => {
+		if (!searchQuery) return [];
+		return allSongs.filter(
+			(song) =>
+				song.title.toLowerCase().includes(searchQuery.toLowerCase()) ||
+				song.artist.toLowerCase().includes(searchQuery.toLowerCase())
+		);
+	}, [searchQuery, allSongs]);
 
 	return (
 		<main className='rounded-md overflow-hidden h-full bg-gradient-to-b from-zinc-800 to-zinc-900'>
-			<Topbar />
+			<Topbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 			<ScrollArea className='h-[calc(100vh-180px)]'>
 				<div className='p-4 sm:p-6'>
-					<h1 className='text-2xl sm:text-3xl font-bold mb-6'>Good afternoon</h1>
-					<FeaturedSection />
-
-					<div className='space-y-8'>
-						<SectionGrid title='Made For You' songs={madeForYouSongs} isLoading={isLoading} />
-						<SectionGrid title='Trending' songs={trendingSongs} isLoading={isLoading} />
-					</div>
+					{searchQuery ? (
+						<>
+							<h1 className='text-2xl sm:text-3xl font-bold mb-6'>Search Results</h1>
+							<SearchResults songs={filteredSongs} />
+						</>
+					) : (
+						<>
+							<h1 className='text-2xl sm:text-3xl font-bold mb-6'>Good afternoon</h1>
+							<FeaturedSection />
+							<div className='space-y-8'>
+								<SectionGrid title='Made For You' songs={madeForYouSongs} isLoading={isLoading} />
+								<SectionGrid title='Trending' songs={trendingSongs} isLoading={isLoading} />
+							</div>
+						</>
+					)}
 				</div>
 			</ScrollArea>
 		</main>

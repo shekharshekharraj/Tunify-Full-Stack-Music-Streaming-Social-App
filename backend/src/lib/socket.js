@@ -17,16 +17,12 @@ export const initializeSocket = (server) => {
 			userSockets.set(userId, socket.id);
 			userActivities.set(userId, "Idle");
 
-			// broadcast to all connected sockets that this user just logged in
 			io.emit("user_connected", userId);
-
 			socket.emit("users_online", Array.from(userSockets.keys()));
-
 			io.emit("activities", Array.from(userActivities.entries()));
 		});
 
 		socket.on("update_activity", ({ userId, activity }) => {
-			console.log("activity updated", userId, activity);
 			userActivities.set(userId, activity);
 			io.emit("activity_updated", { userId, activity });
 		});
@@ -41,12 +37,13 @@ export const initializeSocket = (server) => {
 					content,
 				});
 
-				// send to receiver in realtime, if they're online
 				const receiverSocketId = userSockets.get(receiverId);
 				if (receiverSocketId) {
+					// Send the new message to the receiver. The client will handle notification logic.
 					io.to(receiverSocketId).emit("receive_message", message);
 				}
 
+				// Confirm to the sender that the message was sent and saved
 				socket.emit("message_sent", message);
 			} catch (error) {
 				console.error("Message error:", error);
@@ -57,7 +54,6 @@ export const initializeSocket = (server) => {
 		socket.on("disconnect", () => {
 			let disconnectedUserId;
 			for (const [userId, socketId] of userSockets.entries()) {
-				// find disconnected user
 				if (socketId === socket.id) {
 					disconnectedUserId = userId;
 					userSockets.delete(userId);
