@@ -25,8 +25,8 @@ const Topbar = ({ searchQuery, setSearchQuery }: TopbarProps) => {
     '
 		>
 			<div className='flex gap-2 items-center'>
-				<img src='/spotify.png' className='size-8' alt='Spotify logo' />
-				<span className='hidden sm:inline'>Spotify</span>
+				<img src='/Tunify.png' className='size-8' alt='Tunify logo' />
+				<span className='hidden sm:inline'>Tunify</span>
 			</div>
 
 			{/* Conditionally render the search bar only if props are provided and it's the home page */}
