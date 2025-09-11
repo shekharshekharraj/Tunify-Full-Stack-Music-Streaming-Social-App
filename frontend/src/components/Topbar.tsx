@@ -5,7 +5,7 @@ import SignInOAuthButtons from "./SignInOAuthButtons";
 import { useAuthStore } from "@/stores/useAuthStore";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "./ui/button";
-import Searchbar from "./Searchbar";
+import Searchbar from "./ui/Searchbar";
 
 // Make the search props optional by adding '?'
 type TopbarProps = {
