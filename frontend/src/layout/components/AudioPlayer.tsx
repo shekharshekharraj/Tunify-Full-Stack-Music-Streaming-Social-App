@@ -9,39 +9,59 @@ const AudioPlayer = () => {
 
 	// handle play/pause logic
 	useEffect(() => {
-		if (isPlaying) audioRef.current?.play();
-		else audioRef.current?.pause();
+		const audio = audioRef.current;
+		if (!audio) return;
+
+		const handlePlay = async () => {
+			try {
+				await audio.play();
+			} catch (error: any) {
+				// We can safely ignore the AbortError, as it's expected.
+				if (error.name !== "AbortError") {
+					console.error("Audio playback error:", error);
+				}
+			}
+		};
+
+		if (isPlaying) {
+			handlePlay();
+		} else {
+			audio.pause();
+		}
 	}, [isPlaying]);
 
 	// handle song ends
 	useEffect(() => {
 		const audio = audioRef.current;
-
-		const handleEnded = () => {
-			playNext();
-		};
-
+		const handleEnded = () => playNext();
 		audio?.addEventListener("ended", handleEnded);
-
 		return () => audio?.removeEventListener("ended", handleEnded);
 	}, [playNext]);
 
 	// handle song changes
 	useEffect(() => {
-		if (!audioRef.current || !currentSong) return;
-
 		const audio = audioRef.current;
+		if (!audio || !currentSong) return;
 
-		// check if this is actually a new song
+		const handlePlay = async () => {
+			try {
+				await audio.play();
+			} catch (error: any) {
+				if (error.name !== "AbortError") {
+					console.error("Audio playback error on song change:", error);
+				}
+			}
+		};
+
 		const isSongChange = prevSongRef.current !== currentSong?.audioUrl;
 		if (isSongChange) {
 			audio.src = currentSong?.audioUrl;
-			// reset the playback position
 			audio.currentTime = 0;
-
 			prevSongRef.current = currentSong?.audioUrl;
 
-			if (isPlaying) audio.play();
+			if (isPlaying) {
+				handlePlay();
+			}
 		}
 	}, [currentSong, isPlaying]);
 
