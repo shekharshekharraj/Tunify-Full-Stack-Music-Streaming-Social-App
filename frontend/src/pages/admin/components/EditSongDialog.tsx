@@ -19,20 +19,20 @@ type EditSongDialogProps = {
 };
 
 const EditSongDialog = ({ song, isOpen, onClose }: EditSongDialogProps) => {
-	const [formData, setFormData] = useState({ title: "", artist: "" });
+	const [formData, setFormData] = useState({ title: "", artist: "", duration: 0 });
 	const { updateSong, isLoading } = useMusicStore();
 
 	useEffect(() => {
 		if (song) {
-			setFormData({ title: song.title, artist: song.artist });
+			setFormData({ title: song.title, artist: song.artist, duration: song.duration });
 		}
 	}, [song]);
 
 	if (!song) return null;
 
 	const handleChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-		const { name, value } = e.target;
-		setFormData((prev) => ({ ...prev, [name]: value }));
+		const { name, value, type } = e.target;
+		setFormData((prev) => ({ ...prev, [name]: type === "number" ? parseInt(value) : value }));
 	};
 
 	const handleSubmit = async () => {
@@ -66,6 +66,17 @@ const EditSongDialog = ({ song, isOpen, onClose }: EditSongDialogProps) => {
 							onChange={handleChange}
 							className='bg-zinc-800 border-zinc-700'
 							placeholder='Enter artist name'
+						/>
+					</div>
+					<div className='space-y-2'>
+						<label className='text-sm font-medium'>Duration (seconds)</label>
+						<Input
+							name='duration'
+							type='number'
+							value={formData.duration}
+							onChange={handleChange}
+							className='bg-zinc-800 border-zinc-700'
+							placeholder='Enter duration in seconds'
 						/>
 					</div>
 				</div>

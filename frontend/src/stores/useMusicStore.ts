@@ -23,7 +23,7 @@ interface MusicStore {
 	fetchSongs: () => Promise<void>;
 	deleteSong: (id: string) => Promise<void>;
 	deleteAlbum: (id: string) => Promise<void>;
-	updateSong: (id: string, data: { title: string; artist: string }) => Promise<void>;
+	updateSong: (id: string, data: { title: string; artist: string; duration: number }) => Promise<void>;
 	updateAlbum: (id: string, data: { title: string; artist: string; releaseYear: number }) => Promise<void>;
 }
 

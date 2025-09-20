@@ -5,15 +5,15 @@ import { Album } from "../models/album.model.js";
 export const updateSong = async (req, res, next) => {
 	try {
 		const { id } = req.params;
-		const { title, artist } = req.body;
+		const { title, artist, duration } = req.body; // Add duration here
 
-		if (!title || !artist) {
-			return res.status(400).json({ message: "Title and artist are required." });
+		if (!title || !artist || duration === undefined) {
+			return res.status(400).json({ message: "Title, artist, and duration are required." });
 		}
 
 		const updatedSong = await Song.findByIdAndUpdate(
 			id,
-			{ title, artist },
+			{ title, artist, duration }, // Add duration to the update object
 			{ new: true } // Return the updated document
 		);
 
@@ -27,7 +27,7 @@ export const updateSong = async (req, res, next) => {
 	}
 };
 
-// Update an album's details
+// ... (updateAlbum function remains the same)
 export const updateAlbum = async (req, res, next) => {
 	try {
 		const { id } = req.params;
