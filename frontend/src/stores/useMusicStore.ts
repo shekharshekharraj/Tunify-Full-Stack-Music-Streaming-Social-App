@@ -23,11 +23,13 @@ interface MusicStore {
 	fetchSongs: () => Promise<void>;
 	deleteSong: (id: string) => Promise<void>;
 	deleteAlbum: (id: string) => Promise<void>;
+	updateSong: (id: string, data: { title: string; artist: string }) => Promise<void>;
+	updateAlbum: (id: string, data: { title: string; artist: string; releaseYear: number }) => Promise<void>;
 }
 
 export const useMusicStore = create<MusicStore>((set) => ({
-	albums: [],
 	songs: [],
+	albums: [],
 	isLoading: false,
 	error: null,
 	currentAlbum: null,
@@ -41,6 +43,38 @@ export const useMusicStore = create<MusicStore>((set) => ({
 		totalArtists: 0,
 	},
 
+	updateSong: async (id, data) => {
+		set({ isLoading: true, error: null });
+		try {
+			const response = await axiosInstance.put(`/admin/songs/${id}`, data);
+			const updatedSong = response.data;
+			set((state) => ({
+				songs: state.songs.map((song) => (song._id === id ? updatedSong : song)),
+			}));
+			toast.success("Song updated successfully");
+		} catch (error: any) {
+			toast.error("Failed to update song: " + error.message);
+		} finally {
+			set({ isLoading: false });
+		}
+	},
+
+	updateAlbum: async (id, data) => {
+		set({ isLoading: true, error: null });
+		try {
+			const response = await axiosInstance.put(`/admin/albums/${id}`, data);
+			const updatedAlbum = response.data;
+			set((state) => ({
+				albums: state.albums.map((album) => (album._id === id ? updatedAlbum : album)),
+			}));
+			toast.success("Album updated successfully");
+		} catch (error: any) {
+			toast.error("Failed to update album: " + error.message);
+		} finally {
+			set({ isLoading: false });
+		}
+	},
+	
 	deleteSong: async (id) => {
 		set({ isLoading: true, error: null });
 		try {
@@ -65,7 +99,7 @@ export const useMusicStore = create<MusicStore>((set) => ({
 			set((state) => ({
 				albums: state.albums.filter((album) => album._id !== id),
 				songs: state.songs.map((song) =>
-					song.albumId === state.albums.find((a) => a._id === id)?.title ? { ...song, album: null } : song
+					song.albumId === state.albums.find((a) => a._id === id)?.title ? { ...song, albumId: null } : song
 				),
 			}));
 			toast.success("Album deleted successfully");
