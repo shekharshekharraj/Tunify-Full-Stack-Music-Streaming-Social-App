@@ -41,16 +41,60 @@ const allowedOrigins = [
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 // --- THE FIX IS HERE ---
-// Set security headers, including a Content Security Policy for Clerk
+// Set security headers, including an expanded Content Security Policy for Clerk
 app.use(
 	helmet({
 		contentSecurityPolicy: {
 			directives: {
 				...helmet.contentSecurityPolicy.getDefaultDirectives(),
-				"connect-src": ["'self'", "https://*.clerk.accounts.dev"],
-				"img-src": ["'self'", "data:", "https://*.clerk.com"],
+				// Allow scripts from 'self', Clerk's CDN, and 'unsafe-eval' for some dev builds or third-party libs
+				"script-src": [
+					"'self'",
+					"'unsafe-inline'", // Often required for React/Vite in development, or some Clerk internals
+					"https://accounts.clerk.com",
+					"https://*.clerk.accounts.dev",
+				],
+				// Allow workers to be created from 'blob:' URLs (often used by Clerk or other libraries)
+				// and also from Clerk's domains if they load workers as external scripts
+				"worker-src": [
+					"'self'",
+					"blob:",
+					"https://accounts.clerk.com",
+					"https://*.clerk.accounts.dev",
+				],
+				"connect-src": [
+					"'self'",
+					"https://*.clerk.accounts.dev",
+				],
+				"img-src": [
+					"'self'",
+					"data:",
+					"https://*.clerk.com",
+					"https://i.scdn.co", // For Spotify images if you use them
+					"https://source.unsplash.com", // For Unsplash images if you use them
+					"https://*.clerk.accounts.dev",
+				],
+				"style-src": [
+					"'self'",
+					"'unsafe-inline'", // Required for inline styles or some libraries
+					"https://accounts.clerk.com",
+					"https://*.clerk.accounts.dev",
+				],
+				"font-src": [
+					"'self'",
+					"data:", // If you embed base64 fonts
+					"https://fonts.gstatic.com", // For Google Fonts
+					"https://accounts.clerk.com",
+					"https://*.clerk.accounts.dev",
+				],
+				"frame-src": [
+					"'self'",
+					"https://accounts.clerk.com",
+					"https://*.clerk.accounts.dev",
+				],
 			},
 		},
+		crossOriginEmbedderPolicy: { policy: "credentialless" }, // Set to credentialless or false if issues persist
 	})
 );
 // --- END OF FIX ---
