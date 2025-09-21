@@ -6,8 +6,7 @@ import { createServer } from "http";
 import cors from "cors";
 import cron from "node-cron";
 import fileUpload from "express-fileupload";
-import { clerkMiddleware } from "@clerk/express"; // CORRECTED: Use 'import'
-import { Webhook } from "svix"; // CORRECTED: Use 'import' (if svix is actually used)
+import { clerkMiddleware } from "@clerk/express"; // Keep Clerk middleware import
 
 // Security and Logging middleware
 import helmet from "helmet";
@@ -45,7 +44,7 @@ const allowedOrigins = [
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
 
-// --- THE CRITICAL FIX IS HERE (rest of this section is unchanged) ---
+// --- CRITICAL CSP FIX (rest of this section is unchanged) ---
 const backendUrlForCsp = process.env.BACKEND_URL ? new URL(process.env.BACKEND_URL).origin : '';
 const frontendUrlForCsp = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : '';
 
@@ -109,7 +108,7 @@ if (process.env.NODE_ENV === "production") {
 } else {
 	app.use(helmet());
 }
-// --- END OF CRITICAL FIX ---
+// --- END OF CRITICAL CSP FIX ---
 
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
