@@ -1,6 +1,6 @@
 # Tunify - Full-Stack Music Streaming & Social App
 
-A feature-rich, full-stack music streaming application inspired by Spotify. This project combines a seamless, immersive audio playback experience with a real-time social layer, allowing users to listen to music, see their friends' activity, view synchronized lyrics, and chat one-on-one. It also includes a complete administrative backend for managing the music catalog.
+A feature-rich, full-stack music streaming application inspired by latest Music Leading Platform. This project combines a seamless, immersive audio playback experience with a real-time social layer, allowing users to listen to music, see their friends' activity, view synchronized lyrics, and chat one-on-one. It also includes a complete administrative backend for managing the music catalog.
 
 ## Key Features
 
