@@ -28,6 +28,7 @@ A feature-rich, full-stack music streaming application inspired by Spotify. This
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f9c396ba-e3cf-4104-bce9-f21bac119018" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/dafa0385-698b-43b3-9047-fd2387765dce" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/87a45fe7-b95e-4f3e-97b0-96ac6246f6f1" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/d4d639ab-8e72-4574-bb58-20c47ca7184a" />
 <img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7dbf8e56-1b4e-4df1-853e-d5e6f259e8c6" />
 
 ## Tech Stack
