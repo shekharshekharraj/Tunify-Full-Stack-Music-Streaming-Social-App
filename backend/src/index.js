@@ -6,7 +6,8 @@ import { createServer } from "http";
 import cors from "cors";
 import cron from "node-cron";
 import fileUpload from "express-fileupload";
-import { clerkMiddleware } from "@clerk/express";
+import { clerkMiddleware } from "@clerk/express"; // CORRECTED: Use 'import'
+import { Webhook } from "svix"; // CORRECTED: Use 'import' (if svix is actually used)
 
 // Security and Logging middleware
 import helmet from "helmet";
@@ -15,7 +16,7 @@ import rateLimit from "express-rate-limit";
 
 // Route and DB imports
 import { initializeSocket } from "./lib/socket.js";
-import { connectDB } from "./lib/db.js"; // REVERTED: Correct ES Module import
+import { connectDB } from "./lib/db.js";
 import userRoutes from "./routes/user.route.js";
 import adminRoutes from "./routes/admin.route.js";
 import authRoutes from "./routes/auth.route.js";
@@ -33,17 +34,22 @@ const PORT = process.env.PORT || 5000;
 
 // Dynamic CORS Configuration
 const allowedOrigins = [
-	"http://localhost:3000", "http://localhost:3001",
-	"http://localhost:3002", "http://localhost:3003",
+	"http://localhost:3000",
+	"http://localhost:3001",
+	"http://localhost:3002",
+	"http://localhost:3003",
 	process.env.FRONTEND_URL,
-].filter(Boolean); // Filter out any undefined/null values
+	process.env.BACKEND_URL,
+].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
-// Only apply the strict Content Security Policy in production
-if (process.env.NODE_ENV === "production") {
-	const frontendUrlForCsp = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : '';
 
+// --- THE CRITICAL FIX IS HERE (rest of this section is unchanged) ---
+const backendUrlForCsp = process.env.BACKEND_URL ? new URL(process.env.BACKEND_URL).origin : '';
+const frontendUrlForCsp = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : '';
+
+if (process.env.NODE_ENV === "production") {
 	app.use(
 		helmet({
 			contentSecurityPolicy: {
@@ -63,8 +69,10 @@ if (process.env.NODE_ENV === "production") {
 					],
 					"connect-src": [
 						"'self'",
+						"http://localhost:5000",
 						"https://*.clerk.accounts.dev",
 						"https://clerk-telemetry.com",
+						backendUrlForCsp,
 						frontendUrlForCsp,
 					].filter(Boolean),
 					"img-src": [
@@ -101,11 +109,13 @@ if (process.env.NODE_ENV === "production") {
 } else {
 	app.use(helmet());
 }
+// --- END OF CRITICAL FIX ---
+
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 app.use("/api", limiter);
 app.use(morgan("dev"));
-app.use(express.json());
+app.use(express.json({ limit: "10mb" }));
 app.use(fileUpload({ useTempFiles: true, tempFileDir: path.join(__dirname, "tmp"), createParentPath: true, limits: { fileSize: 10 * 1024 * 1024 } }));
 
 app.use(clerkMiddleware());
