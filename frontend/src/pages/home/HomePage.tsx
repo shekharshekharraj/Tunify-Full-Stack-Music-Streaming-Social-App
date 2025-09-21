@@ -6,6 +6,7 @@ import { ScrollArea } from "@/components/ui/scroll-area";
 import SectionGrid from "./components/SectionGrid";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import SearchResults from "./components/SearchResults";
+import { SignedIn, useUser } from "@clerk/clerk-react";
 
 const HomePage = () => {
 	const [searchQuery, setSearchQuery] = useState("");
@@ -17,18 +18,21 @@ const HomePage = () => {
 		fetchTrendingSongs,
 		isLoading,
 		madeForYouSongs,
-		// 'featuredSongs' was removed from here as it was unused
 		trendingSongs,
 	} = useMusicStore();
 
 	const { initializeQueue } = usePlayerStore();
+	const { isSignedIn } = useUser();
 
 	useEffect(() => {
-		fetchSongs();
 		fetchFeaturedSongs();
 		fetchMadeForYouSongs();
 		fetchTrendingSongs();
-	}, [fetchSongs, fetchFeaturedSongs, fetchMadeForYouSongs, fetchTrendingSongs]);
+
+		if (isSignedIn) {
+			fetchSongs();
+		}
+	}, [isSignedIn, fetchSongs, fetchFeaturedSongs, fetchMadeForYouSongs, fetchTrendingSongs]);
 
 	useEffect(() => {
 		if (songs.length > 0) {
@@ -54,15 +58,20 @@ const HomePage = () => {
 
 	return (
 		<main className='rounded-md overflow-hidden h-full bg-gradient-to-b from-zinc-800 to-zinc-900'>
+			{/* Topbar no longer needs the showSearch prop */}
 			<Topbar searchQuery={searchQuery} setSearchQuery={setSearchQuery} />
 			<ScrollArea className='h-[calc(100vh-180px)]'>
 				<div className='p-4 sm:p-6'>
-					{searchQuery ? (
-						<>
-							<h1 className='text-2xl sm:text-3xl font-bold mb-6'>Search Results</h1>
-							<SearchResults songs={filteredSongs} />
-						</>
-					) : (
+					<SignedIn>
+						{searchQuery && (
+							<>
+								<h1 className='text-2xl sm:text-3xl font-bold mb-6'>Search Results</h1>
+								<SearchResults songs={filteredSongs} />
+							</>
+						)}
+					</SignedIn>
+
+					{!searchQuery && (
 						<>
 							<h1 className='text-2xl sm:text-3xl font-bold mb-6'>{getGreeting()}</h1>
 							<FeaturedSection />

@@ -2,12 +2,21 @@ import { Server } from "socket.io";
 import { Message } from "../models/message.model.js";
 
 export const initializeSocket = (server) => {
+	// --- THE FIX IS HERE ---
+	// Add the same CORS options to the Socket.IO server
 	const io = new Server(server, {
 		cors: {
-			origin: "http://localhost:3000",
+			origin: [
+				"http://localhost:3000",
+				"http://localhost:3001",
+				"http://localhost:3002",
+				"http://localhost:3003",
+				process.env.FRONTEND_URL,
+			].filter(Boolean),
 			credentials: true,
 		},
 	});
+	// --- END OF FIX ---
 
 	const userSockets = new Map(); // { userId: socketId}
 	const userActivities = new Map(); // {userId: activity}
@@ -30,20 +39,11 @@ export const initializeSocket = (server) => {
 		socket.on("send_message", async (data) => {
 			try {
 				const { senderId, receiverId, content } = data;
-
-				const message = await Message.create({
-					senderId,
-					receiverId,
-					content,
-				});
-
+				const message = await Message.create({ senderId, receiverId, content });
 				const receiverSocketId = userSockets.get(receiverId);
 				if (receiverSocketId) {
-					// Send the new message to the receiver. The client will handle notification logic.
 					io.to(receiverSocketId).emit("receive_message", message);
 				}
-
-				// Confirm to the sender that the message was sent and saved
 				socket.emit("message_sent", message);
 			} catch (error) {
 				console.error("Message error:", error);

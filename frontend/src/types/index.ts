@@ -8,6 +8,7 @@ export interface Song {
 	duration: number;
 	createdAt: string;
 	updatedAt: string;
+	lyrics?: string;
 }
 
 export interface Album {
@@ -35,9 +36,13 @@ export interface Message {
 	updatedAt: string;
 }
 
+// --- THE FIX IS HERE ---
+// This interface was incorrect. It has been updated to match your code.
 export interface User {
 	_id: string;
 	clerkId: string;
+// Your components are expecting `fullName` and `imageUrl`, not the old properties.
 	fullName: string;
 	imageUrl: string;
 }
+// --- END OF FIX ---

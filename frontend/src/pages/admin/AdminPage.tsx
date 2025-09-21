@@ -7,29 +7,45 @@ import SongsTabContent from "./components/SongsTabContent";
 import AlbumsTabContent from "./components/AlbumsTabContent";
 import { useEffect } from "react";
 import { useMusicStore } from "@/stores/useMusicStore";
+import { useUser } from "@clerk/clerk-react"; // Import the useUser hook from Clerk
+import { Loader2 } from "lucide-react"; // For a loading indicator
 
 const AdminPage = () => {
-	const { isAdmin, isLoading } = useAuthStore();
-
+	const { isAdmin } = useAuthStore();
+	const { isLoaded, isSignedIn } = useUser(); // Get authentication status from Clerk
 	const { fetchAlbums, fetchSongs, fetchStats } = useMusicStore();
 
+	// This useEffect will now only run AFTER Clerk has loaded and confirmed the user is signed in
 	useEffect(() => {
-		fetchAlbums();
-		fetchSongs();
-		fetchStats();
-	}, [fetchAlbums, fetchSongs, fetchStats]);
+		if (isLoaded && isSignedIn) {
+			fetchAlbums();
+			fetchSongs();
+			fetchStats();
+		}
+	}, [isLoaded, isSignedIn, fetchAlbums, fetchSongs, fetchStats]); // Add isLoaded and isSignedIn to the dependency array
 
-	if (!isAdmin && !isLoading) return <div>Unauthorized</div>;
+	// While Clerk is checking the user's session, show a loading spinner
+	if (!isLoaded) {
+		return (
+			<div className='flex h-full min-h-screen items-center justify-center bg-zinc-900'>
+				<Loader2 className='h-16 w-16 animate-spin text-emerald-500' />
+			</div>
+		);
+	}
+
+	// If Clerk is loaded and the user is not an admin, show "Unauthorized"
+	if (!isAdmin) {
+		return (
+			<div className='flex h-full min-h-screen items-center justify-center bg-zinc-900 text-white'>
+				Unauthorized
+			</div>
+		);
+	}
 
 	return (
-		<div
-			className='min-h-screen bg-gradient-to-b from-zinc-900 via-zinc-900
-   to-black text-zinc-100 p-8'
-		>
+		<div className='min-h-screen bg-gradient-to-b from-zinc-900 via-zinc-900 to-black text-zinc-100 p-8'>
 			<Header />
-
 			<DashboardStats />
-
 			<Tabs defaultValue='songs' className='space-y-6'>
 				<TabsList className='p-1 bg-zinc-800/50'>
 					<TabsTrigger value='songs' className='data-[state=active]:bg-zinc-700'>
@@ -41,7 +57,6 @@ const AdminPage = () => {
 						Albums
 					</TabsTrigger>
 				</TabsList>
-
 				<TabsContent value='songs'>
 					<SongsTabContent />
 				</TabsContent>

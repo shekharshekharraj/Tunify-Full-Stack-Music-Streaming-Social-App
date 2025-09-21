@@ -23,7 +23,7 @@ interface MusicStore {
 	fetchSongs: () => Promise<void>;
 	deleteSong: (id: string) => Promise<void>;
 	deleteAlbum: (id: string) => Promise<void>;
-	updateSong: (id: string, data: { title: string; artist: string; duration: number }) => Promise<void>;
+	updateSong: (id: string, data: { title: string; artist: string; duration: number; lyrics?: string }) => Promise<void>;
 	updateAlbum: (id: string, data: { title: string; artist: string; releaseYear: number }) => Promise<void>;
 }
 
@@ -49,7 +49,10 @@ export const useMusicStore = create<MusicStore>((set) => ({
 			const response = await axiosInstance.put(`/admin/songs/${id}`, data);
 			const updatedSong = response.data;
 			set((state) => ({
-				songs: state.songs.map((song) => (song._id === id ? updatedSong : song)),
+				songs: state.songs.map((song) => (song._id === id ? { ...song, ...updatedSong } : song)),
+				featuredSongs: state.featuredSongs.map((song) => (song._id === id ? { ...song, ...updatedSong } : song)),
+				madeForYouSongs: state.madeForYouSongs.map((song) => (song._id === id ? { ...song, ...updatedSong } : song)),
+				trendingSongs: state.trendingSongs.map((song) => (song._id === id ? { ...song, ...updatedSong } : song)),
 			}));
 			toast.success("Song updated successfully");
 		} catch (error: any) {
@@ -79,7 +82,6 @@ export const useMusicStore = create<MusicStore>((set) => ({
 		set({ isLoading: true, error: null });
 		try {
 			await axiosInstance.delete(`/admin/songs/${id}`);
-
 			set((state) => ({
 				songs: state.songs.filter((song) => song._id !== id),
 			}));
@@ -136,7 +138,6 @@ export const useMusicStore = create<MusicStore>((set) => ({
 
 	fetchAlbums: async () => {
 		set({ isLoading: true, error: null });
-
 		try {
 			const response = await axiosInstance.get("/albums");
 			set({ albums: response.data });

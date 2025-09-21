@@ -4,7 +4,12 @@ import { protectRoute, requireAdmin } from "../middleware/auth.middleware.js";
 
 const router = Router();
 
-router.get("/", protectRoute, requireAdmin, getAllSongs);
+// --- THE FIX IS HERE ---
+// Removed 'requireAdmin' so that any logged-in user can fetch songs for the search feature.
+// The route is still protected, so only signed-in users can access it.
+router.get("/", protectRoute, getAllSongs);
+// --- END OF FIX ---
+
 router.get("/featured", getFeaturedSongs);
 router.get("/made-for-you", getMadeForYouSongs);
 router.get("/trending", getTrendingSongs);

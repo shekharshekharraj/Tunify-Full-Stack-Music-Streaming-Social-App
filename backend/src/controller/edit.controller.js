@@ -1,11 +1,10 @@
 import { Song } from "../models/song.model.js";
 import { Album } from "../models/album.model.js";
 
-// Update a song's details
 export const updateSong = async (req, res, next) => {
 	try {
 		const { id } = req.params;
-		const { title, artist, duration } = req.body; // Add duration here
+		const { title, artist, duration, lyrics } = req.body; // Add lyrics
 
 		if (!title || !artist || duration === undefined) {
 			return res.status(400).json({ message: "Title, artist, and duration are required." });
@@ -13,8 +12,8 @@ export const updateSong = async (req, res, next) => {
 
 		const updatedSong = await Song.findByIdAndUpdate(
 			id,
-			{ title, artist, duration }, // Add duration to the update object
-			{ new: true } // Return the updated document
+			{ title, artist, duration, lyrics }, // Add lyrics to the update object
+			{ new: true }
 		);
 
 		if (!updatedSong) {
@@ -27,7 +26,6 @@ export const updateSong = async (req, res, next) => {
 	}
 };
 
-// ... (updateAlbum function remains the same)
 export const updateAlbum = async (req, res, next) => {
 	try {
 		const { id } = req.params;
@@ -40,7 +38,7 @@ export const updateAlbum = async (req, res, next) => {
 		const updatedAlbum = await Album.findByIdAndUpdate(
 			id,
 			{ title, artist, releaseYear },
-			{ new: true } // Return the updated document
+			{ new: true }
 		);
 
 		if (!updatedAlbum) {

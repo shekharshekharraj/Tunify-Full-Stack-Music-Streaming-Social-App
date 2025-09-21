@@ -2,7 +2,6 @@ import { Song } from "../models/song.model.js";
 import { Album } from "../models/album.model.js";
 import cloudinary from "../lib/cloudinary.js";
 
-// helper function for cloudinary uploads
 const uploadToCloudinary = async (file) => {
 	try {
 		const result = await cloudinary.uploader.upload(file.tempFilePath, {
@@ -21,7 +20,7 @@ export const createSong = async (req, res, next) => {
 			return res.status(400).json({ message: "Please upload all files" });
 		}
 
-		const { title, artist, albumId, duration } = req.body;
+		const { title, artist, albumId, duration, lyrics } = req.body; // Add lyrics
 		const audioFile = req.files.audioFile;
 		const imageFile = req.files.imageFile;
 
@@ -34,13 +33,13 @@ export const createSong = async (req, res, next) => {
 			audioUrl,
 			imageUrl,
 			duration,
-			albumId: albumId || null,
+			albumId: albumId === 'none' ? null : albumId,
+			lyrics: lyrics || "", // Add lyrics here
 		});
 
 		await song.save();
 
-		// if song belongs to an album, update the album's songs array
-		if (albumId) {
+		if (albumId && albumId !== 'none') {
 			await Album.findByIdAndUpdate(albumId, {
 				$push: { songs: song._id },
 			});
@@ -55,18 +54,13 @@ export const createSong = async (req, res, next) => {
 export const deleteSong = async (req, res, next) => {
 	try {
 		const { id } = req.params;
-
 		const song = await Song.findById(id);
-
-		// if song belongs to an album, update the album's songs array
 		if (song.albumId) {
 			await Album.findByIdAndUpdate(song.albumId, {
 				$pull: { songs: song._id },
 			});
 		}
-
 		await Song.findByIdAndDelete(id);
-
 		res.status(200).json({ message: "Song deleted successfully" });
 	} catch (error) {
 		console.log("Error in deleteSong", error);
@@ -78,18 +72,9 @@ export const createAlbum = async (req, res, next) => {
 	try {
 		const { title, artist, releaseYear } = req.body;
 		const { imageFile } = req.files;
-
 		const imageUrl = await uploadToCloudinary(imageFile);
-
-		const album = new Album({
-			title,
-			artist,
-			imageUrl,
-			releaseYear,
-		});
-
+		const album = new Album({ title, artist, imageUrl, releaseYear });
 		await album.save();
-
 		res.status(201).json(album);
 	} catch (error) {
 		console.log("Error in createAlbum", error);

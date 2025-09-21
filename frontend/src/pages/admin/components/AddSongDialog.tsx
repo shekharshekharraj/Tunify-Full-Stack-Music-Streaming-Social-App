@@ -10,29 +10,24 @@ import {
 } from "@/components/ui/dialog";
 import { Input } from "@/components/ui/input";
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select";
+import { Textarea } from "@/components/ui/textarea";
 import { axiosInstance } from "@/lib/axios";
 import { useMusicStore } from "@/stores/useMusicStore";
 import { Plus, Upload } from "lucide-react";
 import { useRef, useState } from "react";
 import toast from "react-hot-toast";
 
-interface NewSong {
-	title: string;
-	artist: string;
-	album: string;
-	duration: string;
-}
-
 const AddSongDialog = () => {
 	const { albums } = useMusicStore();
 	const [songDialogOpen, setSongDialogOpen] = useState(false);
 	const [isLoading, setIsLoading] = useState(false);
 
-	const [newSong, setNewSong] = useState<NewSong>({
+	const [newSong, setNewSong] = useState({
 		title: "",
 		artist: "",
 		album: "",
 		duration: "0",
+		lyrics: "",
 	});
 
 	const [files, setFiles] = useState<{ audio: File | null; image: File | null }>({
@@ -45,41 +40,27 @@ const AddSongDialog = () => {
 
 	const handleSubmit = async () => {
 		setIsLoading(true);
-
 		try {
 			if (!files.audio || !files.image) {
 				return toast.error("Please upload both audio and image files");
 			}
-
 			const formData = new FormData();
-
 			formData.append("title", newSong.title);
 			formData.append("artist", newSong.artist);
 			formData.append("duration", newSong.duration);
 			if (newSong.album && newSong.album !== "none") {
 				formData.append("albumId", newSong.album);
 			}
-
+			formData.append("lyrics", newSong.lyrics);
 			formData.append("audioFile", files.audio);
 			formData.append("imageFile", files.image);
 
 			await axiosInstance.post("/admin/songs", formData, {
-				headers: {
-					"Content-Type": "multipart/form-data",
-				},
+				headers: { "Content-Type": "multipart/form-data" },
 			});
 
-			setNewSong({
-				title: "",
-				artist: "",
-				album: "",
-				duration: "0",
-			});
-
-			setFiles({
-				audio: null,
-				image: null,
-			});
+			setNewSong({ title: "", artist: "", album: "", duration: "0", lyrics: "" });
+			setFiles({ audio: null, image: null });
 			toast.success("Song added successfully");
 		} catch (error: any) {
 			toast.error("Failed to add song: " + error.message);
@@ -96,35 +77,15 @@ const AddSongDialog = () => {
 					Add Song
 				</Button>
 			</DialogTrigger>
-
 			<DialogContent className='bg-zinc-900 border-zinc-700 max-h-[80vh] overflow-auto'>
 				<DialogHeader>
 					<DialogTitle>Add New Song</DialogTitle>
 					<DialogDescription>Add a new song to your music library</DialogDescription>
 				</DialogHeader>
-
 				<div className='space-y-4 py-4'>
-					<input
-						type='file'
-						accept='audio/*'
-						ref={audioInputRef}
-						hidden
-						onChange={(e) => setFiles((prev) => ({ ...prev, audio: e.target.files![0] }))}
-					/>
-
-					<input
-						type='file'
-						ref={imageInputRef}
-						className='hidden'
-						accept='image/*'
-						onChange={(e) => setFiles((prev) => ({ ...prev, image: e.target.files![0] }))}
-					/>
-
-					{/* image upload area */}
-					<div
-						className='flex items-center justify-center p-6 border-2 border-dashed border-zinc-700 rounded-lg cursor-pointer'
-						onClick={() => imageInputRef.current?.click()}
-					>
+					<input type='file' accept='audio/*' ref={audioInputRef} hidden onChange={(e) => setFiles((prev) => ({ ...prev, audio: e.target.files![0] }))} />
+					<input type='file' ref={imageInputRef} className='hidden' accept='image/*' onChange={(e) => setFiles((prev) => ({ ...prev, image: e.target.files![0] }))} />
+					<div className='flex items-center justify-center p-6 border-2 border-dashed border-zinc-700 rounded-lg cursor-pointer' onClick={() => imageInputRef.current?.click()}>
 						<div className='text-center'>
 							{files.image ? (
 								<div className='space-y-2'>
@@ -144,8 +105,6 @@ const AddSongDialog = () => {
 							)}
 						</div>
 					</div>
-
-					{/* Audio upload */}
 					<div className='space-y-2'>
 						<label className='text-sm font-medium'>Audio File</label>
 						<div className='flex items-center gap-2'>
@@ -154,43 +113,21 @@ const AddSongDialog = () => {
 							</Button>
 						</div>
 					</div>
-
-					{/* other fields */}
 					<div className='space-y-2'>
 						<label className='text-sm font-medium'>Title</label>
-						<Input
-							value={newSong.title}
-							onChange={(e) => setNewSong({ ...newSong, title: e.target.value })}
-							className='bg-zinc-800 border-zinc-700'
-						/>
+						<Input value={newSong.title} onChange={(e) => setNewSong({ ...newSong, title: e.target.value })} className='bg-zinc-800 border-zinc-700' />
 					</div>
-
 					<div className='space-y-2'>
 						<label className='text-sm font-medium'>Artist</label>
-						<Input
-							value={newSong.artist}
-							onChange={(e) => setNewSong({ ...newSong, artist: e.target.value })}
-							className='bg-zinc-800 border-zinc-700'
-						/>
+						<Input value={newSong.artist} onChange={(e) => setNewSong({ ...newSong, artist: e.target.value })} className='bg-zinc-800 border-zinc-700' />
 					</div>
-
 					<div className='space-y-2'>
 						<label className='text-sm font-medium'>Duration (seconds)</label>
-						<Input
-							type='number'
-							min='0'
-							value={newSong.duration}
-							onChange={(e) => setNewSong({ ...newSong, duration: e.target.value || "0" })}
-							className='bg-zinc-800 border-zinc-700'
-						/>
+						<Input type='number' min='0' value={newSong.duration} onChange={(e) => setNewSong({ ...newSong, duration: e.target.value || "0" })} className='bg-zinc-800 border-zinc-700' />
 					</div>
-
 					<div className='space-y-2'>
 						<label className='text-sm font-medium'>Album (Optional)</label>
-						<Select
-							value={newSong.album}
-							onValueChange={(value) => setNewSong({ ...newSong, album: value })}
-						>
+						<Select value={newSong.album} onValueChange={(value) => setNewSong({ ...newSong, album: value })}>
 							<SelectTrigger className='bg-zinc-800 border-zinc-700'>
 								<SelectValue placeholder='Select album' />
 							</SelectTrigger>
@@ -204,8 +141,11 @@ const AddSongDialog = () => {
 							</SelectContent>
 						</Select>
 					</div>
+					<div className='space-y-2'>
+						<label className='text-sm font-medium'>Lyrics (Optional)</label>
+						<Textarea value={newSong.lyrics} onChange={(e) => setNewSong({ ...newSong, lyrics: e.target.value })} className='bg-zinc-800 border-zinc-700 min-h-[100px]' placeholder='Enter song lyrics...' />
+					</div>
 				</div>
-
 				<DialogFooter>
 					<Button variant='outline' onClick={() => setSongDialogOpen(false)} disabled={isLoading}>
 						Cancel

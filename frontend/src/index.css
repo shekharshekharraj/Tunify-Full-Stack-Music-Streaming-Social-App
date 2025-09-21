@@ -67,3 +67,17 @@
 		@apply bg-background text-foreground;
 	}
 }
+
+/* ... (keep all your existing CSS at the top) ... */
+
+/* --- Add this new code at the end of the file --- */
+
+/* Custom styles for the slider thumb */
+.custom-slider .thumb {
+  background-color: white;
+  border: none;
+  box-shadow: none;
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+}

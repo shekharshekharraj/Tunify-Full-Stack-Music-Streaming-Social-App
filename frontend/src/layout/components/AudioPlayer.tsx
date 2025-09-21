@@ -10,13 +10,12 @@ const AudioPlayer = () => {
 	// handle play/pause logic
 	useEffect(() => {
 		const audio = audioRef.current;
-		if (!audio) return;
+		if (!audio) return; // Null check
 
 		const handlePlay = async () => {
 			try {
 				await audio.play();
 			} catch (error: any) {
-				// We can safely ignore the AbortError, as it's expected.
 				if (error.name !== "AbortError") {
 					console.error("Audio playback error:", error);
 				}
@@ -30,12 +29,26 @@ const AudioPlayer = () => {
 		}
 	}, [isPlaying]);
 
-	// handle song ends
+	// handle song ends (Repeat logic)
 	useEffect(() => {
 		const audio = audioRef.current;
-		const handleEnded = () => playNext();
-		audio?.addEventListener("ended", handleEnded);
-		return () => audio?.removeEventListener("ended", handleEnded);
+		// --- THE FIX IS HERE ---
+		if (!audio) return; // Add a null check before adding the event listener
+
+		const handleEnded = () => {
+			const { repeatMode } = usePlayerStore.getState();
+			if (repeatMode === "one") {
+				// We already know audio is not null here
+				audio.currentTime = 0;
+				audio.play();
+			} else {
+				playNext();
+			}
+		};
+
+		audio.addEventListener("ended", handleEnded);
+
+		return () => audio.removeEventListener("ended", handleEnded);
 	}, [playNext]);
 
 	// handle song changes
@@ -45,6 +58,7 @@ const AudioPlayer = () => {
 
 		const handlePlay = async () => {
 			try {
+				// We already know audio is not null here
 				await audio.play();
 			} catch (error: any) {
 				if (error.name !== "AbortError") {
@@ -55,9 +69,9 @@ const AudioPlayer = () => {
 
 		const isSongChange = prevSongRef.current !== currentSong?.audioUrl;
 		if (isSongChange) {
-			audio.src = currentSong?.audioUrl;
+			audio.src = currentSong.audioUrl;
 			audio.currentTime = 0;
-			prevSongRef.current = currentSong?.audioUrl;
+			prevSongRef.current = currentSong.audioUrl;
 
 			if (isPlaying) {
 				handlePlay();
