@@ -30,6 +30,8 @@ const app = express();
 const PORT = process.env.PORT || 5000;
 
 // --- Middlewares ---
+
+// Dynamic CORS Configuration
 const allowedOrigins = [
 	"http://localhost:3000", "http://localhost:3001",
 	"http://localhost:3002", "http://localhost:3003",
@@ -37,20 +39,32 @@ const allowedOrigins = [
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
-app.use(helmet());
+
+// --- THE FIX IS HERE ---
+// Set security headers, including a Content Security Policy for Clerk
+app.use(
+	helmet({
+		contentSecurityPolicy: {
+			directives: {
+				...helmet.contentSecurityPolicy.getDefaultDirectives(),
+				"connect-src": ["'self'", "https://*.clerk.accounts.dev"],
+				"img-src": ["'self'", "data:", "https://*.clerk.com"],
+			},
+		},
+	})
+);
+// --- END OF FIX ---
+
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 app.use("/api", limiter);
 app.use(morgan("dev"));
 app.use(express.json());
 app.use(fileUpload({ useTempFiles: true, tempFileDir: path.join(__dirname, "tmp"), createParentPath: true, limits: { fileSize: 10 * 1024 * 1024 } }));
 
-// --- THE FIX IS HERE ---
 // Apply Clerk middleware globally to all routes that follow.
 app.use(clerkMiddleware());
-// --- END OF FIX ---
 
 // --- Routes ---
-// Now, none of the routes below need clerkMiddleware() specified individually.
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
