@@ -15,7 +15,7 @@ import rateLimit from "express-rate-limit";
 
 // Route and DB imports
 import { initializeSocket } from "./lib/socket.js";
-import { connectDB } from require("./lib/db.js"); // Changed to require for commonJS compatibility, if needed. Assuming ESM now.
+import { connectDB } from "./lib/db.js"; // REVERTED: Correct ES Module import
 import userRoutes from "./routes/user.route.js";
 import adminRoutes from "./routes/admin.route.js";
 import authRoutes from "./routes/auth.route.js";
@@ -40,38 +40,33 @@ const allowedOrigins = [
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
-// --- THE FIX IS HERE ---
 // Only apply the strict Content Security Policy in production
 if (process.env.NODE_ENV === "production") {
-	// Ensure FRONTEND_URL is defined and correctly formatted for CSP
-	const frontendUrlForCsp = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : ''; // Get just the origin
+	const frontendUrlForCsp = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : '';
 
 	app.use(
 		helmet({
 			contentSecurityPolicy: {
 				directives: {
 					...helmet.contentSecurityPolicy.getDefaultDirectives(),
-					// Allow scripts from 'self', Clerk's CDN, and 'unsafe-inline' (often needed for frameworks)
 					"script-src": [
 						"'self'",
 						"'unsafe-inline'",
 						"https://accounts.clerk.com",
 						"https://*.clerk.accounts.dev",
 					],
-					// Allow workers to be created from 'blob:' URLs and Clerk's domains
 					"worker-src": [
 						"'self'",
 						"blob:",
 						"https://accounts.clerk.com",
 						"https://*.clerk.accounts.dev",
 					],
-					// Crucial: Add Clerk telemetry and the specific frontend URL for connect-src
 					"connect-src": [
 						"'self'",
 						"https://*.clerk.accounts.dev",
-						"https://clerk-telemetry.com", // Add this for Clerk analytics
-						frontendUrlForCsp, // Use the sanitized frontend URL
-					].filter(Boolean), // Filter out any empty strings if frontendUrlForCsp is empty
+						"https://clerk-telemetry.com",
+						frontendUrlForCsp,
+					].filter(Boolean),
 					"img-src": [
 						"'self'",
 						"data:",
@@ -104,10 +99,8 @@ if (process.env.NODE_ENV === "production") {
 		})
 	);
 } else {
-	// In development, use a less restrictive policy (often just the defaults from helmet)
 	app.use(helmet());
 }
-// --- END OF FIX ---
 
 const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
 app.use("/api", limiter);
