@@ -24,6 +24,11 @@ A feature-rich, full-stack music streaming application inspired by Spotify. This
   * **Admin Dashboard**: A secure, role-protected dashboard for managing the entire music library.
   * **Song & Album Management**: Full CRUD (Create, Read, Update, Delete) functionality for songs and albums, including audio/artwork uploads to Cloudinary and a rich text editor for adding/editing LRC-formatted lyrics.
   * **Application Statistics**: View key stats like total users, songs, albums, and unique artists.
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/38a37497-0853-4015-a50d-8848e7c9f5f6" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/f9c396ba-e3cf-4104-bce9-f21bac119018" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/dafa0385-698b-43b3-9047-fd2387765dce" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/87a45fe7-b95e-4f3e-97b0-96ac6246f6f1" />
+<img width="1920" height="1080" alt="image" src="https://github.com/user-attachments/assets/7dbf8e56-1b4e-4df1-853e-d5e6f259e8c6" />
 
 ## Tech Stack
 
