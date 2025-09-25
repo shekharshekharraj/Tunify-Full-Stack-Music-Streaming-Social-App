@@ -9,7 +9,6 @@ import cors from "cors";
 import cron from "node-cron";
 import fileUpload from "express-fileupload";
 import { clerkMiddleware } from "@clerk/express";
-import fetch from "node-fetch";
 import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
