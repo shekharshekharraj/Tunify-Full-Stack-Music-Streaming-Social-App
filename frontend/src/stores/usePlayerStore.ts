@@ -1,174 +1,208 @@
 import { create } from "zustand";
+import { persist } from "zustand/middleware";
 import { Song } from "@/types";
+import { axiosInstance } from "@/lib/axios";
 import { useChatStore } from "./useChatStore";
 
 export type RepeatMode = "off" | "queue" | "one";
 
-interface PlayerStore {
-	currentSong: Song | null;
-	isPlaying: boolean;
-	queue: Song[];
-	currentIndex: number;
-	isFullScreen: boolean;
-	showLyrics: boolean;
-	currentTime: number;
-	repeatMode: RepeatMode;
-	dominantColor: string;
-
-	initializeQueue: (songs: Song[]) => void;
-	playAlbum: (songs: Song[], startIndex?: number) => void;
-	setCurrentSong: (song: Song | null) => void;
-	togglePlay: () => void;
-	playNext: () => void;
-	playPrevious: () => void;
-	toggleFullScreen: () => void;
-	toggleLyrics: () => void;
-	setCurrentTime: (time: number) => void;
-	toggleRepeatMode: () => void;
-	setDominantColor: (color: string) => void;
+interface SocketAuth {
+  userId: string;
+  [key: string]: any;
 }
 
-export const usePlayerStore = create<PlayerStore>((set, get) => ({
-	currentSong: null,
-	isPlaying: false,
-	queue: [],
-	currentIndex: -1,
-	isFullScreen: false, // --- THE FIX IS HERE --- Ensure this is 'false'
-	showLyrics: false,
-	currentTime: 0,
-	repeatMode: "off",
-	dominantColor: "20,20,20",
+/** Audio nodes object stored in Zustand so multiple components can reuse it */
+export type AudioNodes = {
+  audioElement?: HTMLAudioElement | null;
+  audioContext?: AudioContext | null;
+  analyser?: AnalyserNode | null;
+  source?: MediaElementAudioSourceNode | null;
+};
 
-	setCurrentTime: (time: number) => {
-		set({ currentTime: time });
-	},
+interface PlayerStore {
+  currentSong: Song | null;
+  isPlaying: boolean;
+  queue: Song[];
+  currentIndex: number;
+  isFullScreen: boolean;
+  showLyrics: boolean;
+  currentTime: number;
+  repeatMode: RepeatMode;
+  dominantColor: string;
 
-	toggleLyrics: () => {
-		set((state) => ({ showLyrics: !state.showLyrics }));
-	},
+  // audio node sharing
+  audioNodes: AudioNodes;
+  setAudioNodes: (nodes: AudioNodes) => void;
 
-	toggleFullScreen: () => {
-		set((state) => ({ isFullScreen: !state.isFullScreen }));
-	},
+  initializeQueue: (songs: Song[]) => void;
+  playAlbum: (songs: Song[], startIndex?: number) => void;
+  setCurrentSong: (song: Song | null) => void;
+  togglePlay: () => void;
+  playNext: () => void;
+  playPrevious: () => void;
+  toggleFullScreen: () => void;
+  toggleLyrics: () => void;
+  setCurrentTime: (time: number) => void;
+  toggleRepeatMode: () => void;
+  setDominantColor: (color: string) => void;
+}
 
-	toggleRepeatMode: () => {
-		set((state) => {
-			if (state.repeatMode === "off") {
-				return { repeatMode: "queue" };
-			}
-			if (state.repeatMode === "queue") {
-				return { repeatMode: "one" };
-			}
-			return { repeatMode: "off" };
-		});
-	},
-    
-	setDominantColor: (color: string) => {
-		set({ dominantColor: color });
-	},
+export const usePlayerStore = create<PlayerStore>()(
+  persist(
+    (set, get) => ({
+      currentSong: null,
+      queue: [],
+      isPlaying: false,
+      currentIndex: -1,
+      isFullScreen: false,
+      showLyrics: false,
+      currentTime: 0,
+      repeatMode: "off",
+      dominantColor: "20,20,20",
 
-	initializeQueue: (songs: Song[]) => {
-		set({
-			queue: songs,
-			currentSong: get().currentSong || songs[0],
-			currentIndex: get().currentIndex === -1 ? 0 : get().currentIndex,
-		});
-	},
+      // audio nodes initial state
+      audioNodes: {},
+      setAudioNodes: (nodes: AudioNodes) => set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
 
-	playAlbum: (songs: Song[], startIndex = 0) => {
-		if (songs.length === 0) return;
-		const song = songs[startIndex];
-		const socket = useChatStore.getState().socket;
-		if (socket.auth) {
-			socket.emit("update_activity", {
-				userId: socket.auth.userId,
-				activity: `Playing ${song.title} by ${song.artist}`,
-			});
-		}
-		set({ queue: songs, currentSong: song, currentIndex: startIndex, isPlaying: true });
-	},
+      setCurrentTime: (time) => set({ currentTime: time }),
 
-	setCurrentSong: (song: Song | null) => {
-		if (!song) return;
-		const socket = useChatStore.getState().socket;
-		if (socket.auth) {
-			socket.emit("update_activity", {
-				userId: socket.auth.userId,
-				activity: `Playing ${song.title} by ${song.artist}`,
-			});
-		}
-		const songIndex = get().queue.findIndex((s) => s._id === song._id);
-		set({
-			currentSong: song,
-			isPlaying: true,
-			currentIndex: songIndex !== -1 ? songIndex : get().currentIndex,
-		});
-	},
+      toggleLyrics: () => set((state) => ({ showLyrics: !state.showLyrics })),
 
-	togglePlay: () => {
-		const willStartPlaying = !get().isPlaying;
-		const currentSong = get().currentSong;
-		const socket = useChatStore.getState().socket;
-		if (socket.auth) {
-			socket.emit("update_activity", {
-				userId: socket.auth.userId,
-				activity: willStartPlaying && currentSong ? `Playing ${currentSong.title} by ${currentSong.artist}` : "Idle",
-			});
-		}
-		set({ isPlaying: willStartPlaying });
-	},
+      toggleFullScreen: () => set((state) => ({ isFullScreen: !state.isFullScreen })),
 
-	playNext: () => {
-		const { currentIndex, queue, repeatMode } = get();
-		
-		const isLastSong = currentIndex === queue.length - 1;
+      setDominantColor: (color) => set({ dominantColor: color }),
 
-		if (isLastSong && repeatMode !== "queue") {
-			set({ isPlaying: false });
-			const socket = useChatStore.getState().socket;
-			if (socket.auth) {
-				socket.emit("update_activity", { userId: socket.auth.userId, activity: `Idle` });
-			}
-			return;
-		}
-		
-		const nextIndex = isLastSong ? 0 : currentIndex + 1;
-		const nextSong = queue[nextIndex];
+      toggleRepeatMode: () => {
+        set((state) => {
+          if (state.repeatMode === "off") return { repeatMode: "queue" };
+          if (state.repeatMode === "queue") return { repeatMode: "one" };
+          return { repeatMode: "off" };
+        });
+      },
 
-		const socket = useChatStore.getState().socket;
-		if (socket.auth) {
-			socket.emit("update_activity", {
-				userId: socket.auth.userId,
-				activity: `Playing ${nextSong.title} by ${nextSong.artist}`,
-			});
-		}
+      initializeQueue: (songs) => {
+        set({
+          queue: songs,
+          currentSong: get().currentSong || songs[0],
+          currentIndex: get().currentIndex === -1 ? 0 : get().currentIndex,
+        });
+      },
 
-		set({
-			currentSong: nextSong,
-			currentIndex: nextIndex,
-			isPlaying: true,
-		});
-	},
+      playAlbum: (songs, startIndex = 0) => {
+        if (songs.length === 0) return;
+        const song = songs[startIndex];
 
-	playPrevious: () => {
-		const { currentIndex, queue } = get();
-		const prevIndex = currentIndex - 1;
-		if (prevIndex >= 0) {
-			const prevSong = queue[prevIndex];
-			const socket = useChatStore.getState().socket;
-			if (socket.auth) {
-				socket.emit("update_activity", {
-					userId: socket.auth.userId,
-					activity: `Playing ${prevSong.title} by ${prevSong.artist}`,
-				});
-			}
-			set({ currentSong: prevSong, currentIndex: prevIndex, isPlaying: true });
-		} else {
-			set({ isPlaying: false });
-			const socket = useChatStore.getState().socket;
-			if (socket.auth) {
-				socket.emit("update_activity", { userId: socket.auth.userId, activity: `Idle` });
-			}
-		}
-	},
-}));
+        axiosInstance.post("/activity/log-listen", { songId: song._id });
+
+        const socket = useChatStore.getState().socket;
+        if (socket?.auth) {
+          const auth = socket.auth as SocketAuth;
+          socket.emit("update_activity", {
+            userId: auth.userId,
+            activity: `Playing ${song.title} by ${song.artist}`,
+          });
+        }
+
+        set({ queue: songs, currentSong: song, currentIndex: startIndex, isPlaying: true });
+      },
+
+      setCurrentSong: (song) => {
+        if (!song) return;
+
+        if (get().currentSong?._id !== song._id) {
+          axiosInstance.post("/activity/log-listen", { songId: song._id });
+        }
+
+        const socket = useChatStore.getState().socket;
+        if (socket?.auth) {
+          const auth = socket.auth as SocketAuth;
+          socket.emit("update_activity", {
+            userId: auth.userId,
+            activity: `Playing ${song.title} by ${song.artist}`,
+          });
+        }
+
+        const songIndex = get().queue.findIndex((s) => s._id === song._id);
+        set({
+          currentSong: song,
+          isPlaying: true,
+          currentIndex: songIndex !== -1 ? songIndex : get().currentIndex,
+        });
+      },
+
+      togglePlay: () => {
+        const willStartPlaying = !get().isPlaying;
+        const currentSong = get().currentSong;
+        const socket = useChatStore.getState().socket;
+        if (socket?.auth) {
+          const auth = socket.auth as SocketAuth;
+          socket.emit("update_activity", {
+            userId: auth.userId,
+            activity: willStartPlaying && currentSong ? `Playing ${currentSong.title} by ${currentSong.artist}` : "Idle",
+          });
+        }
+        set({ isPlaying: willStartPlaying });
+      },
+
+      playNext: () => {
+        const { currentIndex, queue, repeatMode } = get();
+        const isLastSong = currentIndex === queue.length - 1;
+
+        if (isLastSong && repeatMode !== "queue") {
+          set({ isPlaying: false });
+          const socket = useChatStore.getState().socket;
+          if (socket?.auth) {
+            const auth = socket.auth as SocketAuth;
+            socket.emit("update_activity", { userId: auth.userId, activity: "Idle" });
+          }
+          return;
+        }
+
+        const nextIndex = isLastSong ? 0 : currentIndex + 1;
+        const nextSong = queue[nextIndex];
+
+        axiosInstance.post("/activity/log-listen", { songId: nextSong._id });
+
+        const socket = useChatStore.getState().socket;
+        if (socket?.auth) {
+          const auth = socket.auth as SocketAuth;
+          socket.emit("update_activity", {
+            userId: auth.userId,
+            activity: `Playing ${nextSong.title} by ${nextSong.artist}`,
+          });
+        }
+
+        set({ currentSong: nextSong, currentIndex: nextIndex, isPlaying: true });
+      },
+
+      playPrevious: () => {
+        const { currentIndex, queue } = get();
+        const prevIndex = currentIndex - 1;
+        if (prevIndex >= 0) {
+          const prevSong = queue[prevIndex];
+
+          axiosInstance.post("/activity/log-listen", { songId: prevSong._id });
+
+          const socket = useChatStore.getState().socket;
+          if (socket?.auth) {
+            const auth = socket.auth as SocketAuth;
+            socket.emit("update_activity", {
+              userId: auth.userId,
+              activity: `Playing ${prevSong.title} by ${prevSong.artist}`,
+            });
+          }
+          set({ currentSong: prevSong, currentIndex: prevIndex, isPlaying: true });
+        }
+      },
+    }),
+    {
+      name: "player-storage",
+      // ✅ This `partialize` option is the fix.
+      // It filters the state and only persists the parts that are not 'audioNodes'.
+      partialize: (state) =>
+        Object.fromEntries(
+          Object.entries(state).filter(([key]) => !["audioNodes"].includes(key))
+        ),
+    }
+  )
+);

@@ -1,144 +1,198 @@
 import { axiosInstance } from "@/lib/axios";
 import { Message, User } from "@/types";
 import { create } from "zustand";
-import { io } from "socket.io-client";
+import { io, Socket } from "socket.io-client";
+import { toast } from "react-hot-toast";
+
+interface SocketAuth {
+  userId: string; // Clerk ID expected by server
+}
 
 interface ChatStore {
-	users: User[];
-	isLoading: boolean;
-	error: string | null;
-	socket: any;
-	isConnected: boolean;
-	onlineUsers: Set<string>;
-	userActivities: Map<string, string>;
-	messages: Message[];
-	selectedUser: User | null;
-	unreadCounts: Map<string, number>; // clerkId -> count
+  users: User[];
+  isLoading: boolean;
+  error: string | null;
+  socket: Socket | null;
+  isConnected: boolean;
+  onlineUsers: Set<string>;
+  userActivities: Map<string, string>;
+  messages: Message[];
+  selectedUser: User | null;
+  currentUserDb: User | null;
+  unreadCounts: Map<string, number>;
 
-	fetchUsers: () => Promise<void>;
-	initSocket: (userId: string) => void;
-	disconnectSocket: () => void;
-	sendMessage: (receiverId: string, senderId: string, content: string) => void;
-	fetchMessages: (userId: string) => Promise<void>;
-	setSelectedUser: (user: User | null) => void;
-	resetUnreadCount: (userId: string) => void;
+  fetchUsers: (clerkId: string) => Promise<void>;
+  initSocket: (clerkId: string) => void; // Clerk ID
+  disconnectSocket: () => void;
+  sendMessage: (receiverId: string, content: string) => void;
+  fetchMessages: (clerkId: string) => Promise<void>;
+  setSelectedUser: (user: User | null) => void;
+  toggleFollow: (targetUserClerkId: string) => Promise<void>;
+  resetUnreadCount: (clerkId: string) => void;
 }
 
 const baseURL = import.meta.env.MODE === "development" ? "http://localhost:5000" : "/";
-
-const socket = io(baseURL, {
-	autoConnect: false,
-	withCredentials: true,
-});
+const socketInstance = io(baseURL, { autoConnect: false, withCredentials: true });
 
 export const useChatStore = create<ChatStore>((set, get) => ({
-	users: [],
-	isLoading: false,
-	error: null,
-	socket: socket,
-	isConnected: false,
-	onlineUsers: new Set(),
-	userActivities: new Map(),
-	messages: [],
-	selectedUser: null,
-	unreadCounts: new Map(),
+  users: [],
+  isLoading: false,
+  error: null,
+  socket: socketInstance,
+  isConnected: false,
+  onlineUsers: new Set(),
+  userActivities: new Map(),
+  messages: [],
+  selectedUser: null,
+  currentUserDb: null,
+  unreadCounts: new Map(),
 
-	setSelectedUser: (user) => {
-		if (user) {
-			get().resetUnreadCount(user.clerkId);
-		}
-		set({ selectedUser: user });
-	},
+  setSelectedUser: (user) => {
+    set({ selectedUser: user, messages: [] });
+    if (user) {
+      get().fetchMessages(user.clerkId);
+      get().resetUnreadCount(user.clerkId);
+    }
+  },
 
-	resetUnreadCount: (userId) => {
-		set((state) => {
-			const newCounts = new Map(state.unreadCounts);
-			newCounts.set(userId, 0);
-			return { unreadCounts: newCounts };
-		});
-	},
+  resetUnreadCount: (clerkId) => {
+    set((state) => {
+      const newCounts = new Map(state.unreadCounts);
+      if (newCounts.has(clerkId)) {
+        newCounts.set(clerkId, 0);
+        return { unreadCounts: newCounts };
+      }
+      return {};
+    });
+  },
 
-	fetchUsers: async () => {
-		set({ isLoading: true, error: null });
-		try {
-			const response = await axiosInstance.get("/users");
-			set({ users: response.data });
-		} catch (error: any) {
-			set({ error: error.response.data.message });
-		} finally {
-			set({ isLoading: false });
-		}
-	},
+  fetchUsers: async (_clerkId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const [usersResponse, currentUserResponse] = await Promise.all([
+        axiosInstance.get("/users"),
+        axiosInstance.get(`/users/me`),
+      ]);
 
-	initSocket: (userId) => {
-		if (!get().isConnected) {
-			socket.auth = { userId };
-			socket.connect();
+      const otherUsers: User[] = usersResponse.data;
+      const currentUser: User = currentUserResponse.data;
 
-			socket.emit("user_connected", userId);
+      if (currentUser && Array.isArray(currentUser.following)) {
+        const followingSet = new Set(currentUser.following.map(String));
+        const updatedUsers = otherUsers.map((u) => ({
+          ...u,
+          isFollowing: followingSet.has(u._id),
+        }));
+        set({ users: updatedUsers, currentUserDb: currentUser });
+      } else {
+        set({ users: otherUsers, currentUserDb: currentUser });
+      }
+    } catch (error: any) {
+      set({ error: "Failed to fetch users" });
+      toast.error("Failed to fetch users");
+    } finally {
+      set({ isLoading: false });
+    }
+  },
 
-			socket.on("users_online", (users: string[]) => set({ onlineUsers: new Set(users) }));
-			socket.on("activities", (activities: [string, string][]) => set({ userActivities: new Map(activities) }));
-			socket.on("user_connected", (userId: string) => set((state) => ({ onlineUsers: new Set([...state.onlineUsers, userId]) })));
+  initSocket: (clerkId) => {
+    const socket = get().socket;
+    if (!socket || get().isConnected) return;
 
-			socket.on("user_disconnected", (userId: string) => {
-				set((state) => {
-					const newOnlineUsers = new Set(state.onlineUsers);
-					newOnlineUsers.delete(userId);
-					return { onlineUsers: newOnlineUsers };
-				});
-			});
+    socket.auth = { userId: clerkId } as SocketAuth; // Clerk ID for server mapping
+    socket.connect();
 
-			// Unified listener for incoming messages
-			socket.on("receive_message", (message: Message) => {
-				// If the chat for the sender is currently open, append the message to the view
-				if (get().selectedUser?.clerkId === message.senderId) {
-					set((state) => ({ messages: [...state.messages, message] }));
-				} else {
-					// Otherwise, increment the unread count for that sender
-					set((state) => {
-						const newCounts = new Map(state.unreadCounts);
-						const currentCount = newCounts.get(message.senderId) || 0;
-						newCounts.set(message.senderId, currentCount + 1);
-						return { unreadCounts: newCounts };
-					});
-				}
-			});
+    socket.on("connect", () => set({ isConnected: true }));
+    socket.on("disconnect", () => set({ isConnected: false }));
 
-			socket.on("message_sent", (message: Message) => set((state) => ({ messages: [...state.messages, message] })));
+    socket.on("users_online", (onlineUserIds: string[]) => {
+      set({ onlineUsers: new Set(onlineUserIds) });
+    });
 
-			socket.on("activity_updated", ({ userId, activity }) => {
-				set((state) => {
-					const newActivities = new Map(state.userActivities);
-					newActivities.set(userId, activity);
-					return { userActivities: newActivities };
-				});
-			});
+    socket.on("activities", (activities: [string, string][]) => {
+      set({ userActivities: new Map(activities) });
+    });
 
-			set({ isConnected: true });
-		}
-	},
+    socket.on("activity_updated", ({ userId: activityUserId, activity }) => {
+      set((state) => {
+        const newActivities = new Map(state.userActivities);
+        newActivities.set(activityUserId, activity);
+        return { userActivities: newActivities };
+      });
+    });
 
-	disconnectSocket: () => {
-		if (get().isConnected) {
-			socket.disconnect();
-			set({ isConnected: false });
-		}
-	},
+    socket.on("receive_message", (message: Message) => {
+      const { selectedUser, currentUserDb } = get();
 
-	sendMessage: async (receiverId, senderId, content) => {
-		get().socket?.emit("send_message", { receiverId, senderId, content });
-	},
+      const isMessageForSelectedChat =
+        (selectedUser?._id === message.sender && currentUserDb?._id === message.receiver) ||
+        (selectedUser?._id === message.receiver && currentUserDb?._id === message.sender);
 
-	fetchMessages: async (userId: string) => {
-		set({ isLoading: true, error: null });
-		try {
-			const response = await axiosInstance.get(`/users/messages/${userId}`);
-			set({ messages: response.data });
-		} catch (error: any) {
-			set({ error: error.response.data.message });
-		} finally {
-			set({ isLoading: false });
-		}
-	},
+      if (isMessageForSelectedChat) {
+        set((state) => ({ messages: [...state.messages, message] }));
+        if (selectedUser?.clerkId) get().resetUnreadCount(selectedUser.clerkId);
+      } else {
+        const sender = get().users.find((u) => u._id === message.sender);
+        if (sender?.clerkId) {
+          set((state) => {
+            const newUnreadCounts = new Map(state.unreadCounts);
+            const currentCount = newUnreadCounts.get(sender.clerkId) || 0;
+            newUnreadCounts.set(sender.clerkId, currentCount + 1);
+            return { unreadCounts: newUnreadCounts };
+          });
+          toast(`New message from ${sender.fullName || "a user"}!`);
+        }
+      }
+    });
+
+    socket.on("message_sent", (message: Message) => {
+      set((state) => ({ messages: [...state.messages, message] }));
+    });
+  },
+
+  disconnectSocket: () => {
+    get().socket?.disconnect();
+  },
+
+  sendMessage: (receiverId, content) => {
+    const { socket, currentUserDb } = get();
+    if (!currentUserDb) return toast.error("User data not found.");
+    if (!socket?.connected) return toast.error("Not connected to chat server.");
+
+    socket.emit("send_message", {
+      senderId: currentUserDb._id, // Mongo
+      receiverId,                  // Mongo
+      content,
+    });
+  },
+
+  fetchMessages: async (clerkId) => {
+    set({ isLoading: true, error: null });
+    try {
+      const response = await axiosInstance.get(`/users/messages/${clerkId}`);
+      set({ messages: response.data });
+      get().resetUnreadCount(clerkId);
+    } catch (error: any) {
+      set({ error: "Failed to fetch messages" });
+      toast.error("Failed to fetch messages");
+    } finally {
+      set({ isLoading: false });
+    }
+  },
+
+  toggleFollow: async (targetUserClerkId: string) => {
+    try {
+      const response = await axiosInstance.post(`/users/toggle-follow/${targetUserClerkId}`);
+      const { message, action } = response.data;
+      toast.success(message);
+
+      set((state) => ({
+        users: state.users.map((u) =>
+          u.clerkId === targetUserClerkId ? { ...u, isFollowing: action === "followed" } : u
+        ),
+      }));
+    } catch (error: any) {
+      toast.error(error.response?.data?.message || "Failed to update follow status");
+    }
+  },
 }));

@@ -15,6 +15,7 @@
 		"@clerk/clerk-react": "^5.47.0",
 		"colorthief": "^2.6.0",
 		"helmet": "^8.1.0",
+		"node-fetch": "^3.3.2",
 		"svix": "^1.76.1"
 	},
 	"devDependencies": {

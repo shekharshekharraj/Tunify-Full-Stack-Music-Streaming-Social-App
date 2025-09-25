@@ -15,8 +15,10 @@ const userSchema = new mongoose.Schema(
 			required: true,
 			unique: true,
 		},
+		following: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // NEW FIELD
+		followers: [{ type: mongoose.Schema.Types.ObjectId, ref: "User" }], // NEW FIELD
 	},
-	{ timestamps: true } //  createdAt, updatedAt
+	{ timestamps: true }
 );
 
 export const User = mongoose.model("User", userSchema);

@@ -1,49 +1,38 @@
-import { ResizableHandle, ResizablePanel, ResizablePanelGroup } from "@/components/ui/resizable";
+// src/layout/MainLayout.tsx
 import { Outlet } from "react-router-dom";
-import LeftSidebar from "./components/LeftSidebar";
-import FriendsActivity from "./components/FriendsActivity";
-import { useEffect, useState } from "react";
-import MainLayoutPlayer from "./components/MainLayoutPlayer"; // Import the new component
+import MainLayoutWrapper from "./MainLayoutWrapper";
+import MainLayoutPlayer from "./components/MainLayoutPlayer";
+import LyricsView from "@/components/LyricsView";
+// If you want a single global Topbar, import it and remove Topbar from pages.
+// import Topbar from "@/components/Topbar";
+
+const PLAYER_H = 96; // height of the bottom player in pixels
 
 const MainLayout = () => {
-	const [isMobile, setIsMobile] = useState(false);
+  return (
+    <div className="min-h-screen bg-zinc-900 text-white">
+      <MainLayoutWrapper />
 
-	useEffect(() => {
-		const checkMobile = () => {
-			setIsMobile(window.innerWidth < 768);
-		};
+      {/* If you want a single global Topbar, uncomment next line and remove Topbar from pages */}
+      {/* <Topbar /> */}
 
-		checkMobile();
-		window.addEventListener("resize", checkMobile);
-		return () => window.removeEventListener("resize", checkMobile);
-	}, []);
+      {/* Page area with extra bottom padding so the fixed player doesn't cover content */}
+      <div
+        className="min-h-[calc(100vh-96px)]"
+        style={{ paddingBottom: `${PLAYER_H}px` }}
+      >
+        <Outlet />
+      </div>
 
-	return (
-		<div className='h-screen bg-black text-white flex flex-col'>
-			<ResizablePanelGroup direction='horizontal' className='flex-1 flex h-full overflow-hidden p-2'>
-				<ResizablePanel defaultSize={20} minSize={isMobile ? 0 : 10} maxSize={30}>
-					<LeftSidebar />
-				</ResizablePanel>
+      {/* Lyrics overlay rendered OUTSIDE the player so it can layer above other UI */}
+      <LyricsView />
 
-				<ResizableHandle className='w-2 bg-black rounded-lg transition-colors' />
-
-				<ResizablePanel defaultSize={isMobile ? 80 : 60}>
-					<Outlet />
-				</ResizablePanel>
-
-				{!isMobile && (
-					<>
-						<ResizableHandle className='w-2 bg-black rounded-lg transition-colors' />
-						<ResizablePanel defaultSize={20} minSize={0} maxSize={25} collapsedSize={0}>
-							<FriendsActivity />
-						</ResizablePanel>
-					</>
-				)}
-			</ResizablePanelGroup>
-
-			{/* Use the new dedicated player component */}
-			<MainLayoutPlayer />
-		</div>
-	);
+      {/* Player is fixed at bottom; keep a lower z-index than LyricsView */}
+      <div className="fixed bottom-0 left-0 right-0 z-40">
+        <MainLayoutPlayer />
+      </div>
+    </div>
+  );
 };
+
 export default MainLayout;

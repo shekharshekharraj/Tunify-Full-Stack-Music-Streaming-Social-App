@@ -1,19 +1,18 @@
+// backend/index.js
 import express from "express";
 import dotenv from "dotenv";
-import path from "path";
+import path, { dirname } from "path";
+import { fileURLToPath } from "url";
 import fs from "fs";
 import { createServer } from "http";
 import cors from "cors";
 import cron from "node-cron";
 import fileUpload from "express-fileupload";
-import { clerkMiddleware } from "@clerk/express"; // Keep Clerk middleware import
-
-// Security and Logging middleware
+import { clerkMiddleware } from "@clerk/express";
+import fetch from "node-fetch";
 import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
-
-// Route and DB imports
 import { initializeSocket } from "./lib/socket.js";
 import { connectDB } from "./lib/db.js";
 import userRoutes from "./routes/user.route.js";
@@ -22,146 +21,82 @@ import authRoutes from "./routes/auth.route.js";
 import songRoutes from "./routes/song.route.js";
 import albumRoutes from "./routes/album.route.js";
 import statRoutes from "./routes/stat.route.js";
+import activityRoutes from "./routes/activity.route.js";
 
 dotenv.config();
 
-const __dirname = path.resolve();
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = dirname(__filename);
+
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// --- Middlewares ---
-
-// Dynamic CORS Configuration
+const stripQuotes = (u) => (u ? u.replace(/^['"]|['"]$/g, "") : u);
 const allowedOrigins = [
-	"http://localhost:3000",
-	"http://localhost:3001",
-	"http://localhost:3002",
-	"http://localhost:3003",
-	process.env.FRONTEND_URL,
-	process.env.BACKEND_URL,
+  "http://localhost:3000",
+  "http://localhost:3001",
+  "http://localhost:3002",
+  "http://localhost:3003",
+  stripQuotes(process.env.FRONTEND_URL),
 ].filter(Boolean);
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
-
-// --- CRITICAL CSP FIX (rest of this section is unchanged) ---
-const backendUrlForCsp = process.env.BACKEND_URL ? new URL(process.env.BACKEND_URL).origin : '';
-const frontendUrlForCsp = process.env.FRONTEND_URL ? new URL(process.env.FRONTEND_URL).origin : '';
-
-if (process.env.NODE_ENV === "production") {
-	app.use(
-		helmet({
-			contentSecurityPolicy: {
-				directives: {
-					...helmet.contentSecurityPolicy.getDefaultDirectives(),
-					"script-src": [
-						"'self'",
-						"'unsafe-inline'",
-						"https://accounts.clerk.com",
-						"https://*.clerk.accounts.dev",
-					],
-					"worker-src": [
-						"'self'",
-						"blob:",
-						"https://accounts.clerk.com",
-						"https://*.clerk.accounts.dev",
-					],
-					"connect-src": [
-						"'self'",
-						"http://localhost:5000",
-						"https://*.clerk.accounts.dev",
-						"https://clerk-telemetry.com",
-						backendUrlForCsp,
-						frontendUrlForCsp,
-					].filter(Boolean),
-					"img-src": [
-						"'self'",
-						"data:",
-						"https://*.clerk.com",
-						"https://i.scdn.co",
-						"https://source.unsplash.com",
-						"https://*.clerk.accounts.dev",
-					],
-					"style-src": [
-						"'self'",
-						"'unsafe-inline'",
-						"https://accounts.clerk.com",
-						"https://*.clerk.accounts.dev",
-					],
-					"font-src": [
-						"'self'",
-						"data:",
-						"https://fonts.gstatic.com",
-						"https://accounts.clerk.com",
-						"https://*.clerk.accounts.dev",
-					],
-					"frame-src": [
-						"'self'",
-						"https://accounts.clerk.com",
-						"https://*.clerk.accounts.dev",
-					],
-				},
-			},
-			crossOriginEmbedderPolicy: { policy: "credentialless" },
-		})
-	);
-} else {
-	app.use(helmet());
-}
-// --- END OF CRITICAL CSP FIX ---
-
-
-const limiter = rateLimit({ windowMs: 15 * 60 * 1000, max: 100, standardHeaders: true, legacyHeaders: false });
-app.use("/api", limiter);
+app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
-app.use(fileUpload({ useTempFiles: true, tempFileDir: path.join(__dirname, "tmp"), createParentPath: true, limits: { fileSize: 10 * 1024 * 1024 } }));
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: path.join(__dirname, "tmp"),
+    createParentPath: true,
+    limits: { fileSize: 10 * 1024 * 1024 },
+  })
+);
+
+const limiter = rateLimit({
+  windowMs: 15 * 60 * 1000,
+  max: 1000,
+  standardHeaders: true,
+  legacyHeaders: false,
+});
+app.use("/api", limiter);
 
 app.use(clerkMiddleware());
 
-// --- Routes ---
+// --- API Routes ---
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
 app.use("/api/songs", songRoutes);
 app.use("/api/albums", albumRoutes);
 app.use("/api/stats", statRoutes);
+app.use("/api/activity", activityRoutes);
 
-// --- Production Frontend Serving ---
-if (process.env.NODE_ENV === "production") {
-	app.use(express.static(path.join(__dirname, "../frontend/dist")));
-	app.get("*", (req, res) => {
-		res.sendFile(path.resolve(__dirname, "../frontend", "dist", "index.html"));
-	});
+// --- Frontend Serving ---
+const frontendDistPath = path.resolve(__dirname, "../frontend/dist");
+if (fs.existsSync(frontendDistPath)) {
+  app.use(express.static(frontendDistPath));
+  app.get("*", (req, res) => {
+    res.sendFile(path.resolve(frontendDistPath, "index.html"));
+  });
+} else {
+  console.warn("Frontend 'dist' directory not found. Frontend will not be served.");
 }
-
-// --- Cron Job for Temp File Cleanup ---
-const tempDir = path.join(process.cwd(), "tmp");
-cron.schedule("0 * * * *", () => {
-	if (!fs.existsSync(tempDir)) return;
-	fs.readdir(tempDir, (err, files) => {
-		if (err) return console.error("Error reading temp directory:", err);
-		for (const file of files) {
-			fs.unlink(path.join(tempDir, file), (err) => {
-				if (err) console.error(`Error deleting temp file ${file}:`, err);
-			});
-		}
-	});
-});
 
 // --- Centralized Error Handler ---
 app.use((err, req, res, next) => {
-	console.error(err.stack);
-	const statusCode = err.statusCode || 500;
-	const message = err.message || "Internal Server Error";
-	res.status(statusCode).json({ success: false, message });
+  const statusCode = err.statusCode || err.status || 500;
+  const message = err.message || "Internal Server Error";
+  res.status(statusCode).json({ success: false, message });
 });
 
 // --- Server Initialization ---
 const httpServer = createServer(app);
-initializeSocket(httpServer);
+const io = initializeSocket(httpServer); // get instance
+app.set("io", io); // <-- make it available to controllers
 
 httpServer.listen(PORT, () => {
-	console.log(`Server is running on port ${PORT}`);
-	connectDB();
+  console.log(`Server is running on port ${PORT}`);
+  connectDB();
 });
