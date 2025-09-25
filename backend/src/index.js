@@ -30,6 +30,7 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
+// --- CORS ---
 const stripQuotes = (u) => (u ? u.replace(/^['"]|['"]$/g, "") : u);
 const allowedOrigins = [
   "http://localhost:3000",
@@ -41,6 +42,7 @@ const allowedOrigins = [
 
 app.use(cors({ origin: allowedOrigins, credentials: true }));
 
+// --- Security / misc middleware ---
 app.use(helmet({ contentSecurityPolicy: false }));
 app.use(morgan("dev"));
 app.use(express.json({ limit: "10mb" }));
@@ -53,6 +55,7 @@ app.use(
   })
 );
 
+// --- Rate limit API only ---
 const limiter = rateLimit({
   windowMs: 15 * 60 * 1000,
   max: 1000,
@@ -61,6 +64,7 @@ const limiter = rateLimit({
 });
 app.use("/api", limiter);
 
+// --- Auth middleware (Clerk) ---
 app.use(clerkMiddleware());
 
 // --- API Routes ---
@@ -72,12 +76,25 @@ app.use("/api/albums", albumRoutes);
 app.use("/api/stats", statRoutes);
 app.use("/api/activity", activityRoutes);
 
-// --- Frontend Serving ---
-const frontendDistPath = path.resolve(__dirname, "../frontend/dist");
-if (fs.existsSync(frontendDistPath)) {
+// --- Frontend Serving (robust path resolution) ---
+const candidates = [
+  // If this file is backend/index.js and frontend is sibling
+  path.resolve(__dirname, "../frontend/dist"),
+  // If this file is backend/src/index.js on Render
+  path.resolve(__dirname, "../../frontend/dist"),
+  // Fallbacks
+  path.resolve(process.cwd(), "frontend/dist"),
+  path.resolve(process.cwd(), "dist"),
+];
+
+const frontendDistPath = candidates.find((p) => fs.existsSync(p));
+
+if (frontendDistPath) {
+  console.log("Serving frontend from:", frontendDistPath);
   app.use(express.static(frontendDistPath));
-  app.get("*", (req, res) => {
-    res.sendFile(path.resolve(frontendDistPath, "index.html"));
+  // Any non-API route falls back to index.html
+  app.get("*", (_req, res) => {
+    res.sendFile(path.join(frontendDistPath, "index.html"));
   });
 } else {
   console.warn("Frontend 'dist' directory not found. Frontend will not be served.");
@@ -92,8 +109,8 @@ app.use((err, req, res, next) => {
 
 // --- Server Initialization ---
 const httpServer = createServer(app);
-const io = initializeSocket(httpServer); // get instance
-app.set("io", io); // <-- make it available to controllers
+const io = initializeSocket(httpServer);
+app.set("io", io);
 
 httpServer.listen(PORT, () => {
   console.log(`Server is running on port ${PORT}`);
