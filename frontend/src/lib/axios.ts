@@ -10,14 +10,16 @@ if (clerkFrontendApi) {
   clerk.load().catch((e) => console.warn("Clerk load (non-fatal):", e));
 }
 
-// Prefer relative baseURL when backend serves the frontend too.
-// If you *really* deploy frontend separately, set VITE_BACKEND_API_URL in that frontend’s env.
-const rawBackend = import.meta.env.VITE_BACKEND_API_URL; // optional override
 const normalize = (u: string) => u.replace(/\/+$/, "");
-const baseURL = rawBackend ? `${normalize(rawBackend)}/api` : "/api";
+
+// ✅ If VITE_BACKEND_API_URL is set, use it; otherwise use same-origin "/api"
+const rawBackend =
+  import.meta.env.VITE_BACKEND_API_URL
+    ? `${normalize(import.meta.env.VITE_BACKEND_API_URL)}/api`
+    : "/api";
 
 export const axiosInstance = axios.create({
-  baseURL,
+  baseURL: rawBackend,
   withCredentials: true,
 });
 
