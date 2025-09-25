@@ -6,7 +6,7 @@ A feature-rich, full-stack music streaming application inspired by modern music 
 
 * **Global audio player** (persistent) with play/pause, next/prev, seek, volume
 * **Repeat modes**: off / one (toggleable)
-* **Full-screen “Now Playing”** with dynamic background (dominant color from artwork) with equiliser
+* **Full-screen “Now Playing”** with dynamic background (dominant color from artwork) with equalizer
 * **Synced lyrics overlay** (LRC) with auto-scroll & active line highlight
 * **Real-time social**: friends’ online status + “Listening to …” activity
 * **1:1 chat** with live delivery & unread counts
