@@ -1,4 +1,3 @@
-// src/components/PlaybackControls.tsx
 import { Button } from "@/components/ui/button";
 import { Slider } from "@/components/ui/slider";
 import { usePlayerStore } from "@/stores/usePlayerStore";
@@ -17,6 +16,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import { useEffect, useRef, useState } from "react";
+import { resumeAudioContext } from "@/stores/usePlayerStore";
 
 const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -97,6 +97,10 @@ export const PlaybackControls = () => {
     if (audio) audio.volume = volume / 100;
   }, [volume]);
 
+  const ensureAudioReady = async () => {
+    await resumeAudioContext(audioNodes?.audioContext);
+  };
+
   const handleSeek = (value: number[]) => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -129,7 +133,8 @@ export const PlaybackControls = () => {
                 size="icon"
                 variant="ghost"
                 className="hover:text-white text-zinc-400"
-                onClick={() => {
+                onClick={async () => {
+                  await ensureAudioReady();
                   toggleFullScreen();
                 }}
               >
@@ -148,28 +153,45 @@ export const PlaybackControls = () => {
               <Shuffle className="h-4 w-4" />
             </Button>
 
-            <Button size="icon" variant="ghost" className="hover:text-white text-zinc-400" onClick={playPrevious} disabled={!currentSong}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="hover:text-white text-zinc-400"
+              onClick={async () => { await ensureAudioReady(); playPrevious(); }}
+              disabled={!currentSong}
+            >
               <SkipBack className="h-4 w-4" />
             </Button>
 
-            <Button size="icon" className="bg-white hover:bg-white/80 text-black rounded-full h-8 w-8" onClick={togglePlay} disabled={!currentSong}>
+            <Button
+              size="icon"
+              className="bg-white hover:bg-white/80 text-black rounded-full h-8 w-8"
+              onClick={async () => { await ensureAudioReady(); togglePlay(); }}
+              disabled={!currentSong}
+            >
               {isPlaying ? <Pause className="h-5 w-5" /> : <Play className="h-5 w-5" />}
             </Button>
 
-            <Button size="icon" variant="ghost" className="hover:text-white text-zinc-400" onClick={playNext} disabled={!currentSong}>
+            <Button
+              size="icon"
+              variant="ghost"
+              className="hover:text-white text-zinc-400"
+              onClick={async () => { await ensureAudioReady(); playNext(); }}
+              disabled={!currentSong}
+            >
               <SkipForward className="h-4 w-4" />
             </Button>
 
             <Button
               size="icon"
               variant="ghost"
-              onClick={toggleRepeatMode}
+              onClick={async () => { await ensureAudioReady(); toggleRepeatMode(); }}
               className={`hidden sm:inline-flex hover:text-white ${repeatMode !== "off" ? "text-green-500" : "text-zinc-400"}`}
             >
               {repeatMode === "one" ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
             </Button>
 
-            {/* ⬇️ REMOVED the center Mic2 button to avoid duplicate */}
+            {/* Center Mic button removed to avoid duplicate */}
           </div>
 
           <div className="hidden sm:flex items-center gap-2 w-full">
@@ -179,7 +201,10 @@ export const PlaybackControls = () => {
               max={duration || 100}
               step={1}
               className="w-full hover:cursor-grab active:cursor-grabbing"
-              onValueChange={handleSeek}
+              onValueChange={async (value) => {
+                await ensureAudioReady();
+                handleSeek(value);
+              }}
             />
             <div className="text-xs text-zinc-400">{formatTime(duration)}</div>
           </div>
@@ -187,11 +212,10 @@ export const PlaybackControls = () => {
 
         {/* Right: extras + volume */}
         <div className="hidden sm:flex items-center gap-4 min-w-[180px] w-[30%] justify-end">
-          {/* Keep ONLY this lyrics toggle */}
           <Button
             size="icon"
             variant="ghost"
-            onClick={toggleLyrics}
+            onClick={async () => { await ensureAudioReady(); toggleLyrics(); }}
             className={`hover:text-white ${showLyrics ? "text-green-500" : "text-zinc-400"}`}
             disabled={!currentSong}
           >

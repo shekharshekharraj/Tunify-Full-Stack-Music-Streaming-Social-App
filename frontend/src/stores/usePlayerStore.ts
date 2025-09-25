@@ -62,13 +62,15 @@ export const usePlayerStore = create<PlayerStore>()(
 
       // audio nodes initial state
       audioNodes: {},
-      setAudioNodes: (nodes: AudioNodes) => set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
+      setAudioNodes: (nodes: AudioNodes) =>
+        set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
 
       setCurrentTime: (time) => set({ currentTime: time }),
 
       toggleLyrics: () => set((state) => ({ showLyrics: !state.showLyrics })),
 
-      toggleFullScreen: () => set((state) => ({ isFullScreen: !state.isFullScreen })),
+      toggleFullScreen: () =>
+        set((state) => ({ isFullScreen: !state.isFullScreen })),
 
       setDominantColor: (color) => set({ dominantColor: color }),
 
@@ -138,7 +140,10 @@ export const usePlayerStore = create<PlayerStore>()(
           const auth = socket.auth as SocketAuth;
           socket.emit("update_activity", {
             userId: auth.userId,
-            activity: willStartPlaying && currentSong ? `Playing ${currentSong.title} by ${currentSong.artist}` : "Idle",
+            activity:
+              willStartPlaying && currentSong
+                ? `Playing ${currentSong.title} by ${currentSong.artist}`
+                : "Idle",
           });
         }
         set({ isPlaying: willStartPlaying });
@@ -197,8 +202,7 @@ export const usePlayerStore = create<PlayerStore>()(
     }),
     {
       name: "player-storage",
-      // ✅ This `partialize` option is the fix.
-      // It filters the state and only persists the parts that are not 'audioNodes'.
+      // Do not persist audioNodes (browser objects)
       partialize: (state) =>
         Object.fromEntries(
           Object.entries(state).filter(([key]) => !["audioNodes"].includes(key))
@@ -206,3 +210,13 @@ export const usePlayerStore = create<PlayerStore>()(
     }
   )
 );
+
+/** Helper to safely resume an AudioContext (fixes playback after auth redirects) */
+export async function resumeAudioContext(ctx?: AudioContext | null) {
+  if (!ctx) return;
+  try {
+    if (ctx.state === "suspended") {
+      await ctx.resume();
+    }
+  } catch {}
+}
