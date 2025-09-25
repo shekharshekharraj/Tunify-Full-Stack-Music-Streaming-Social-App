@@ -10,14 +10,14 @@ if (clerkFrontendApi) {
   clerk.load().catch((e) => console.warn("Clerk load (non-fatal):", e));
 }
 
+// Prefer relative baseURL when backend serves the frontend too.
+// If you *really* deploy frontend separately, set VITE_BACKEND_API_URL in that frontend’s env.
+const rawBackend = import.meta.env.VITE_BACKEND_API_URL; // optional override
 const normalize = (u: string) => u.replace(/\/+$/, "");
-const rawBackend =
-  import.meta.env.VITE_BACKEND_URL ??
-  import.meta.env.VITE_BACKEND_API_URL ?? // fallback to your old var if present
-  "http://localhost:5000";
+const baseURL = rawBackend ? `${normalize(rawBackend)}/api` : "/api";
 
 export const axiosInstance = axios.create({
-  baseURL: `${normalize(rawBackend)}/api`,
+  baseURL,
   withCredentials: true,
 });
 

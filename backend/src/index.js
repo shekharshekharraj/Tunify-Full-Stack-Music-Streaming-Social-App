@@ -32,15 +32,7 @@ const PORT = process.env.PORT || 5000;
 
 // --- CORS ---
 const stripQuotes = (u) => (u ? u.replace(/^['"]|['"]$/g, "") : u);
-const allowedOrigins = [
-  "http://localhost:3000",
-  "http://localhost:3001",
-  "http://localhost:3002",
-  "http://localhost:3003",
-  stripQuotes(process.env.FRONTEND_URL),
-].filter(Boolean);
-
-app.use(cors({ origin: allowedOrigins, credentials: true }));
+app.use(cors({ origin: true, credentials: true }));
 
 // --- Security / misc middleware ---
 app.use(helmet({ contentSecurityPolicy: false }));
