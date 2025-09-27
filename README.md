@@ -1,22 +1,24 @@
-# Tunify · Full-Stack Music Streaming + Real-Time Social App
+# Tunify — Full‑Stack Music Streaming & Social App
 
-A feature-rich, full-stack music streaming application inspired by modern music platforms. Tunify pairs a seamless, immersive audio player with a real-time social layer—listen to music, see what friends are playing, view synchronized lyrics, and chat one-on-one. Includes a role-protected admin console for catalog management.
+A feature‑rich, full‑stack music streaming application inspired by modern platforms. **Tunify** pairs a seamless, immersive audio player with a real‑time social layer—listen to music, see what friends are playing, view synchronized lyrics, and chat one‑on‑one. Includes a role‑protected **Admin Console** for catalog management.
 
-# LIVE_LINK= [https://tunify-full-stack-music-streaming-social.onrender.com]
+**Live Demo:** (https://tunify-full-stack-music-streaming-social.onrender.com)
+
+---
 
 ## ✨ Highlights
 
 * **Global audio player** (persistent) with play/pause, next/prev, seek, volume
 * **Repeat modes**: off / one (toggleable)
-* **Full-screen “Now Playing”** with dynamic background (dominant color from artwork) with equalizer
-* **Synced lyrics overlay** (LRC) with auto-scroll & active line highlight
-* **Real-time social**: friends’ online status + “Listening to …” activity
-* **1:1 chat** with live delivery & unread counts
-* **Feed** (now only shows **followed users’** activities)
-* **Powerful search** across title & artist
-* **Admin console** for songs/albums, Cloudinary upload, and lyrics editing
-* **Tidy, responsive UI** using Tailwind CSS + shadcn/ui
-* **Robust Clerk auth** with admin probe and cache-safe checks
+* **Full‑screen “Now Playing”** with dynamic background (dominant color from artwork) and visualizer
+* **Synced lyrics overlay (LRC)** with auto‑scroll and active line highlight
+* **Real‑time social layer**: friends’ online status + “Listening to …” activity
+* **1:1 chat** with live delivery and unread counts
+* **Feed** (shows followed users’ activities)
+* **Search** across title & artist
+* **Admin console**: songs/albums CRUD, Cloudinary upload, lyrics editing
+* **Responsive UI**: Tailwind CSS + shadcn/ui
+* **Auth**: Clerk with admin checks (email or Clerk user id)
 
 ---
 
@@ -24,33 +26,29 @@ A feature-rich, full-stack music streaming application inspired by modern music 
 
 ### Player & Lyrics
 
-* Global player node (`#global-audio`) shared across UI for rock-solid sync.
-* Repeat **one** / **off** indicator and toggle.
-* **Single mic icon** for Lyrics (duplicates removed).
-* **Overlay lyrics header** (“Lyrics”) fixed + scrolls active line to center.
-* Performance-safe LRC parser; handles `mm:ss.xx` and `mm:ss.xxx`.
+* Single global `<audio id="global-audio">` used app‑wide for perfect sync
+* Repeat one/off; keyboard shortcuts; mobile‑friendly controls
+* Full‑screen player with ambient color from artwork + equalizer/visualizer
+* Lyrics panel with fixed header, smooth auto‑center, mm:ss.xx / mm:ss.xxx parser
 
 ### Discovery & Library
 
-* Time-based greeting (Good morning/afternoon/evening).
-* Sections: **Featured**, **Trending**, **Made For You**.
-* **Left sidebar** is independently scrollable (no more cut-off lists).
-* **Tunify logo & wordmark** in Topbar; click to return **Home**.
-* Logo added to **Album page** only (keeps other routes clean).
+* Time‑based greeting (Good morning/afternoon/evening)
+* Sections: Featured, Trending, Made For You
+* Independent scrolling for sidebar/content to avoid overlap with player
+* Topbar logo/wordmark; album page branding kept clean
 
 ### Social
 
-* Friends Activity: shows online status and current track.
-  Hover on “Listening to …” reveals **full song + artist** (native title tooltip).
-* Chat layout polished: sticky header & input, clean message bubbles, smooth scroll.
+* Friends Activity: online status + current track
+* Hover tooltips for full “Listening to …” strings
+* Direct messages with real‑time delivery via Socket.IO
 
 ### Admin
 
-* **Secure Admin probe:** `GET /api/admin/is-admin` (no caching; varies by `Authorization`).
-* Admin allowed by either **email** (`ADMIN_EMAIL`) or **Clerk user id** (`ADMIN_CLERK_ID`).
-* When logged in, Topbar shows **Admin Dashboard** button.
-* CRUD for Songs & Albums, Cloudinary uploads, and LRC lyrics editor.
-* Stats: total users, songs, albums, unique artists.
+* Secure probe: `GET /api/admin/is-admin` (no‑cache; varies by Authorization)
+* Admin allowed by **either** email (`ADMIN_EMAIL`) **or** Clerk user id (`ADMIN_CLERK_ID`)
+* Dashboard: upload songs/albums (Cloudinary), edit LRC lyrics, basic stats
 
 ---
 
@@ -60,7 +58,7 @@ A feature-rich, full-stack music streaming application inspired by modern music 
 | -------- | ----------------------------------------------------------------------------- |
 | Frontend | React, TypeScript, Vite, Zustand, Tailwind, shadcn/ui, React Router, Axios    |
 | Backend  | Node.js, Express, MongoDB, Mongoose, Socket.IO, Helmet, Morgan, Rate limiting |
-| Auth     | Clerk (Google OAuth)                                                          |
+| Auth     | Clerk (incl. Google OAuth)                                                    |
 | Storage  | Cloudinary                                                                    |
 | Other    | ColorThief (dominant color), LRC parsing                                      |
 
@@ -71,25 +69,25 @@ A feature-rich, full-stack music streaming application inspired by modern music 
 ```
 /frontend
   src/
-    components/             # Topbar, Player, Lyrics, UI building blocks
-    layout/                 # Main layout + Player shell
-    pages/                  # Home, Chat, Admin, Album, etc.
-    stores/                 # Zustand stores (player, music, chat, auth)
-    lib/axios.ts            # Axios instance with Clerk token interceptor
+    components/          # Topbar, Player, Lyrics, UI building blocks
+    layout/              # Main layout + Player shell
+    pages/               # Home, Chat, Admin, Album, etc.
+    stores/              # Zustand stores (player, music, chat, auth)
+    lib/axios.ts         # Axios instance with Clerk token interceptor
 
 /backend
   src/
-    controller/             # admin, user, auth, activity, edit
-    routes/                 # admin, users, songs, albums, stats, activity
-    middleware/             # protectRoute, requireAdmin
-    lib/                    # db, socket, cloudinary
-    models/                 # Song, Album, User
-    index.js                # App bootstrap
+    controller/          # admin, user, auth, activity, edit
+    routes/              # admin, users, songs, albums, stats, activity
+    middleware/          # protectRoute, requireAdmin
+    lib/                 # db, socket, cloudinary
+    models/              # Song, Album, User
+    index.js             # App bootstrap
 ```
 
 ---
 
-## 🚀 Getting Started
+## 🚀 Getting Started (Local)
 
 ### Prerequisites
 
@@ -136,14 +134,9 @@ BACKEND_URL="http://localhost:5000"
 NODE_ENV=development
 ```
 
-> **Admin rule**
->
-> * Set **either** `ADMIN_EMAIL` (matches your login email) **or** `ADMIN_CLERK_ID` (exact Clerk user ID).
-> * The admin probe: `GET /api/admin/is-admin` is **no-cache** and varies by `Authorization`.
+> **Admin rule**: Set **either** `ADMIN_EMAIL` (matches your login email) **or** `ADMIN_CLERK_ID` (exact Clerk user ID). The probe `GET /api/admin/is-admin` is `no-store` and `Vary: Authorization` so role switches reflect immediately.
 
-### 3) Frontend setup
-
-From the **project root**:
+### 3) Frontend setup (from project root)
 
 ```bash
 npm install
@@ -156,14 +149,14 @@ VITE_CLERK_PUBLISHABLE_KEY="your_clerk_publishable_key"
 VITE_BACKEND_API_URL="http://localhost:5000"
 ```
 
-> If you used `FRONTEND_URL`/`BACKEND_URL` on the server, keep these aligned.
+> If you used `FRONTEND_URL/BACKEND_URL` on the server, keep these aligned.
 
 ### 4) Seed data (optional)
 
 ```bash
 # from /backend
 npm run seed:albums
-# (add additional seed scripts as you need, e.g. songs)
+# (add additional seed scripts as needed e.g. songs)
 ```
 
 ### 5) Run
@@ -182,38 +175,69 @@ npm run dev
 npm run dev
 ```
 
-Open `http://localhost:3000`.
+Open [http://localhost:3000](http://localhost:3000)
 
 ---
 
-## 🔐 Admin Access – How it works
+## ☁️ Deploying on Render (single Web Service)
 
-* Frontend asks `GET /api/admin/is-admin` with your **Clerk bearer token**.
-* Backend compares either:
+**Build Command**
 
-  * your email vs `ADMIN_EMAIL`, **or**
-  * your Clerk user id vs `ADMIN_CLERK_ID`.
-* The route is explicitly **no-cache** (`Cache-Control: no-store; Vary: Authorization`), so switching users updates immediately.
-* When `true`, Topbar shows **Admin Dashboard** button.
+* Option A (root script): `npm run build`
+  (Installs deps for both apps, builds frontend)
+* Option B (custom): create `render-build.sh` to `npm ci` + `vite build` frontend, then `npm ci` backend
 
-**Common gotchas**
+**Start Command**
 
-* Wrong env var or typo (e.g., missing quotes).
-* Logged into a different Clerk account.
-* Frontend hitting the wrong backend URL.
-* CORS origins missing (`FRONTEND_URL`).
+* `npm start` (root runs backend’s `node src/index.js`)
+
+**Health Check Path**
+
+* `/api/health`
+
+**Environment (Render)**
+
+* `NODE_ENV=production`
+* **Do not set `PORT`** (Render injects it)
+* Secrets: `MONGODB_URI`, `CLERK_SECRET_KEY`, `CLOUDINARY_*`
+* Optional: `FRONTEND_URL` (only needed if serving frontend from a different origin)
+
+**Static serving**
+
+* Frontend is built to `frontend/dist` and served by Express in production
+* Hashed assets: `Cache-Control: public, max-age=31536000, immutable`
+* `index.html`: short cache / revalidation
 
 ---
 
-## 🧩 Developer Notes & Recent UX Improvements
+## 🔐 Security & Hardening
 
-* **Lyrics overlay header** fixed: always readable; no blurry layer covering the title.
-* **Mic icon duplicated** in controls → removed, single toggle remains (right side).
-* **Left sidebar**: guaranteed vertical scrollbar; large libraries no longer overflow.
-* **Friends Activity tooltip**: native `title` hover shows full “Listening to …” text.
-* **Feed**: now filters to **followed users only** (no self-activity noise).
-* **Topbar brand**: Tunify logo/name is a link back to **Home**.
-* **Album page**: shows Topbar (logo) on this route only; tracks list scrolls independently so the bottom player never overlaps.
+* Helmet (CSP relaxed for audio/Cloudinary)
+* Rate limiting on `/api`
+* Socket.IO auth (Clerk token on connect) + CORS alignment
+* Admin middleware: `protectRoute` + `requireAdmin`
+
+---
+
+## 🐞 Troubleshooting
+
+**Admin button missing**
+
+* Verify `ADMIN_EMAIL`/`ADMIN_CLERK_ID`
+* Network tab → `GET /api/admin/is-admin` → expect `{ isAdmin: true }`
+* Ensure Authorization header is present (Axios interceptor)
+
+**Lyrics overlay title looks dim/hidden**
+
+* Ensure you’re on latest `LyricsView` (fixed header + higher z-index)
+
+**Tailwind unknown at‑rules warnings**
+
+* VS Code → `.vscode/settings.json`:
+
+```json
+{ "css.lint.unknownAtRules": "ignore", "scss.lint.unknownAtRules": "ignore", "less.lint.unknownAtRules": "ignore" }
+```
 
 ---
 
@@ -222,42 +246,13 @@ Open `http://localhost:3000`.
 **Backend**
 
 * `npm run dev` – start dev server (nodemon)
-* `npm run seed:albums` – seed example albums (add your own seeds as needed)
+* `npm run seed:albums` – seed example albums (add more as needed)
 
 **Frontend**
 
 * `npm run dev` – Vite dev server
 * `npm run build` – production build
-* `npm run preview` – preview prod build
-
----
-
-## 🛡 Security & Hardening
-
-* Helmet CSP (relaxed for audio assets & Cloudinary)
-* Rate limiting on `/api`
-* Socket.IO auth via Clerk token
-* Admin routes protected by `protectRoute` + `requireAdmin`
-
----
-
-## 🐞 Troubleshooting
-
-* **Admin button doesn’t show**
-
-  * Verify `ADMIN_EMAIL`/`ADMIN_CLERK_ID`.
-  * Check Network tab: `GET /api/admin/is-admin` must be `200 { isAdmin: true }`.
-  * Ensure the request includes `Authorization: Bearer <token>` (axios interceptor handles this).
-* **Lyrics overlay title looks dim/hidden**
-
-  * Make sure you’re on the updated `LyricsView` (fixed header + higher z-index).
-* **Tailwind unknown at-rules warnings**
-
-  * VS Code → create `.vscode/settings.json`:
-
-    ```json
-    { "css.lint.unknownAtRules": "ignore", "scss.lint.unknownAtRules": "ignore", "less.lint.unknownAtRules": "ignore" }
-    ```
+* `npm run preview` – serve built app locally
 
 ---
 
@@ -265,10 +260,6 @@ Open `http://localhost:3000`.
 
 MIT — feel free to use, modify, and learn.
 
----
-
 ## 👤 Author
 
 **Raj Shekhar**
-
-
