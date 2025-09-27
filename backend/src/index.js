@@ -14,15 +14,15 @@ import rateLimit from "express-rate-limit";
 import compression from "compression";
 
 // NOTE: imports are from src/, so they go up one directory:
-import { initializeSocket } from "../lib/socket.js";
-import { connectDB } from "../lib/db.js";
-import userRoutes from "../routes/user.route.js";
-import adminRoutes from "../routes/admin.route.js";
-import authRoutes from "../routes/auth.route.js";
-import songRoutes from "../routes/song.route.js";
-import albumRoutes from "../routes/album.route.js";
-import statRoutes from "../routes/stat.route.js";
-import activityRoutes from "../routes/activity.route.js";
+import { initializeSocket } from "./lib/socket.js";
+import { connectDB } from "./lib/db.js";
+import userRoutes from "./routes/user.route.js";
+import adminRoutes from "./routes/admin.route.js";
+import authRoutes from "./routes/auth.route.js";
+import songRoutes from "./routes/song.route.js";
+import albumRoutes from "./routes/album.route.js";
+import statRoutes from "./routes/stat.route.js";
+import activityRoutes from "./routes/activity.route.js";
 
 dotenv.config();
 
