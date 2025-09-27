@@ -2,6 +2,8 @@
 
 A feature-rich, full-stack music streaming application inspired by modern music platforms. Tunify pairs a seamless, immersive audio player with a real-time social layer—listen to music, see what friends are playing, view synchronized lyrics, and chat one-on-one. Includes a role-protected admin console for catalog management.
 
+# LIVE_LINK= [https://tunify-full-stack-music-streaming-social.onrender.com]
+
 ## ✨ Highlights
 
 * **Global audio player** (persistent) with play/pause, next/prev, seek, volume
