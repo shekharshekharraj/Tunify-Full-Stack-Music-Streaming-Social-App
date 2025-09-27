@@ -1,3 +1,20 @@
+// types/index.ts
+
+export interface CommentUser {
+  _id: string;
+  fullName: string;
+  imageUrl: string;
+  clerkId: string;
+}
+
+export interface Comment {
+  _id: string;
+  text: string;
+  createdAt: string;
+  updatedAt: string;
+  user: CommentUser; // populated author info
+}
+
 export interface Song {
   _id: string;
   title: string;
@@ -9,6 +26,10 @@ export interface Song {
   createdAt: string;
   updatedAt: string;
   lyrics?: string;
+
+  // NEW: social
+  likes?: string[];     // Clerk IDs of users who liked
+  comments?: Comment[]; // optional when populated
 }
 
 export interface Album {
@@ -53,3 +74,11 @@ export type Activity = {
   songId: Pick<Song, "_id" | "title" | "artist">;
   createdAt: string;
 };
+
+// (Optional) handy shape if you use paginated comments responses
+export interface PaginatedComments {
+  comments: Comment[];
+  page: number;
+  limit: number;
+  total: number;
+}

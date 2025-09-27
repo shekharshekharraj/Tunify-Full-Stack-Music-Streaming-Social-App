@@ -1,6 +1,6 @@
 // src/components/Topbar.tsx
 import React, { useEffect, useState } from "react";
-import { SignedOut, UserButton, useUser } from "@clerk/clerk-react";
+import { SignedOut, UserButton, useUser, useAuth } from "@clerk/clerk-react";
 import { LayoutDashboardIcon } from "lucide-react";
 import { Link, useLocation } from "react-router-dom";
 import SignInOAuthButtons from "./SignInOAuthButtons";
@@ -23,44 +23,42 @@ const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
   const isHomePage = location.pathname === "/";
 
   const { isSignedIn, user } = useUser();
+  const { isLoaded: authLoaded, getToken } = useAuth();
   const [isAdmin, setIsAdmin] = useState(false);
 
-  // Probe backend for admin (uses backend ADMIN_EMAIL)
+  // Probe backend for admin (uses backend ADMIN_EMAIL / ADMIN_CLERK_ID)
   useEffect(() => {
     let mounted = true;
 
     (async () => {
-      if (!isSignedIn) {
-        setIsAdmin(false);
+      // need an authenticated user & auth api ready
+      if (!isSignedIn || !authLoaded) {
+        if (mounted) setIsAdmin(false);
         return;
       }
 
-      // Get a fresh Clerk token for THIS call
-      const clerk = (window as any).Clerk;
-      let authHeader: Record<string, string> = {};
-      if (clerk?.session) {
-        const token = await clerk.session.getToken();
-        if (token) authHeader = { Authorization: `Bearer ${token}` };
-      }
-
-      const ts = Date.now(); // cache-buster
       try {
+        // get a fresh Clerk JWT for THIS call
+        const token = await getToken();
+        const headers: Record<string, string> = { "Cache-Control": "no-cache" };
+        if (token) headers.Authorization = `Bearer ${token}`;
+
+        const ts = Date.now(); // cache-buster
         const { data } = await axiosInstance.get(`/admin/is-admin?_=${ts}`, {
-          headers: { ...authHeader, "Cache-Control": "no-cache" },
+          headers,
           withCredentials: true,
         });
+
         if (mounted) setIsAdmin(!!data?.isAdmin);
-        // console.debug("[Topbar] /admin/is-admin =>", data);
-      } catch (err) {
+      } catch (_err) {
         if (mounted) setIsAdmin(false);
-        // console.debug("[Topbar] admin probe failed", err);
       }
     })();
 
     return () => {
       mounted = false;
     };
-  }, [isSignedIn, user?.id]);
+  }, [isSignedIn, authLoaded, getToken, user?.id]);
 
   if (isFullScreen) return null;
 
