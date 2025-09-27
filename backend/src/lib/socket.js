@@ -19,7 +19,7 @@ export const initializeSocket = (server, allowedOriginsArr = []) => {
   });
 
   io.on("connection", (socket) => {
-    // Client must pass Clerk user id:
+    // client must pass Clerk user id:
     // io(url, { auth: { userId: clerkUserId }, withCredentials: true })
     const clerkUserId = socket.handshake?.auth?.userId;
     if (!clerkUserId) {

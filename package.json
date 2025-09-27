@@ -1,25 +1,28 @@
 {
-	"name": "spotify-clone",
-	"version": "1.0.0",
-	"description": "",
-	"main": "index.js",
-	"scripts": {
-		"build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
-		"start": "npm start --prefix backend"
-	},
-	"keywords": [],
-	"author": "",
-	"license": "ISC",
-	"dependencies": {
-		"@clerk/clerk-js": "^5.93.0",
-		"@clerk/clerk-react": "^5.47.0",
-		"colorthief": "^2.6.0",
-		"framer-motion": "^12.23.22",
-		"helmet": "^8.1.0",
-		"node-fetch": "^3.3.2",
-		"svix": "^1.76.1"
-	},
-	"devDependencies": {
-		"@types/colorthief": "^2.6.0"
-	}
+  "name": "spotify-clone",
+  "version": "1.0.0",
+  "private": true,
+  "description": "",
+  "main": "index.js",
+  "engines": { "node": "20.x" },
+  "scripts": {
+    "render-build": "bash render-build.sh",
+    "build": "npm install --prefix backend && npm install --prefix frontend && npm run build --prefix frontend",
+    "start": "npm start --prefix backend"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "dependencies": {
+    "@clerk/clerk-js": "^5.93.0",
+    "@clerk/clerk-react": "^5.47.0",
+    "colorthief": "^2.6.0",
+    "framer-motion": "^12.23.22",
+    "helmet": "^8.1.0",
+    "node-fetch": "^3.3.2",
+    "svix": "^1.76.1"
+  },
+  "devDependencies": {
+    "@types/colorthief": "^2.6.0"
+  }
 }

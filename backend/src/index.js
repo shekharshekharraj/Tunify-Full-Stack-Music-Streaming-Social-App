@@ -30,13 +30,13 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// trust proxy (Render)
+// Render proxy (cookies, Clerk)
 app.set("trust proxy", 1);
 
 // ---------- CORS ----------
 const normalizeUrl = (u) => {
   if (!u) return u;
-  let x = u.replace(/^['"]|['"]$/g, ""); // strip pasted quotes
+  let x = u.replace(/^['"]|['"]$/g, ""); // strip quotes if pasted in env
   x = x.replace(/\/+$/, "");             // strip trailing slash
   return x;
 };
@@ -44,9 +44,7 @@ const normalizeUrl = (u) => {
 const FRONTEND_URL = normalizeUrl(process.env.FRONTEND_URL);
 const RENDER_URL   = normalizeUrl(process.env.RENDER_EXTERNAL_URL);
 
-// Allow localhost (dev) + optional separate frontend URL + Render URL.
-// When serving frontend from this same service in production, requests are same-origin,
-// so CORS only matters for dev localhost.
+// In prod (single service), calls are same-origin; CORS matters mainly for local dev
 const allowedOriginsArr = [
   "http://localhost:3000",
   "http://localhost:3001",
@@ -63,7 +61,7 @@ const allowedOrigins = new Set(allowedOriginsArr);
 
 const corsConfig = {
   origin: (origin, cb) => {
-    if (!origin || allowedOrigins.has(origin)) return cb(null, true); // same-origin / server-to-server
+    if (!origin || allowedOrigins.has(origin)) return cb(null, true);
     return cb(new Error(`CORS: Origin ${origin} not allowed`));
   },
   credentials: true,
@@ -86,7 +84,7 @@ app.options("*", cors(corsConfig));
 app.disable("x-powered-by");
 app.use(
   helmet({
-    contentSecurityPolicy: false,
+    contentSecurityPolicy: false, // enable and tune later if needed
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
@@ -129,8 +127,7 @@ app.use("/api/activity", activityRoutes);
 
 // ---------- Frontend Static (serve built app) ----------
 const candidates = [
-  path.resolve(__dirname, "../frontend/dist"),    // monorepo: backend + frontend siblings
-  path.resolve(__dirname, "../../frontend/dist"), // when compiled under backend/src
+  path.resolve(__dirname, "../frontend/dist"), // backend/ -> ../frontend/dist (monorepo)
   path.resolve(process.cwd(), "frontend/dist"),
   path.resolve(process.cwd(), "dist"),
 ];
