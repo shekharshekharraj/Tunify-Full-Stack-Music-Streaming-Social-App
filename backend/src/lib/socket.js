@@ -19,8 +19,6 @@ export const initializeSocket = (server, allowedOriginsArr = []) => {
   });
 
   io.on("connection", (socket) => {
-    // client must pass Clerk user id:
-    // io(url, { auth: { userId: clerkUserId }, withCredentials: true })
     const clerkUserId = socket.handshake?.auth?.userId;
     if (!clerkUserId) {
       socket.emit("error", "Unauthorized: missing userId in socket auth");
@@ -34,7 +32,6 @@ export const initializeSocket = (server, allowedOriginsArr = []) => {
     io.emit("activities", Array.from(userActivities.entries()));
 
     socket.on("update_activity", ({ activity }) => {
-      if (!clerkUserId) return;
       const value = activity || "Idle";
       userActivities.set(clerkUserId, value);
       socket.broadcast.emit("activity_updated", { userId: clerkUserId, activity: value });
@@ -62,11 +59,9 @@ export const initializeSocket = (server, allowedOriginsArr = []) => {
     });
 
     socket.on("disconnect", () => {
-      if (clerkUserId) {
-        userSockets.delete(clerkUserId);
-        userActivities.delete(clerkUserId);
-        io.emit("users_online", Array.from(userSockets.keys()));
-      }
+      userSockets.delete(clerkUserId);
+      userActivities.delete(clerkUserId);
+      io.emit("users_online", Array.from(userSockets.keys()));
     });
   });
 
