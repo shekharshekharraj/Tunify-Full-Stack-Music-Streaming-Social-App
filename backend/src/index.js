@@ -1,4 +1,4 @@
-// backend/index.js
+// backend/src/index.js
 import express from "express";
 import dotenv from "dotenv";
 import path, { dirname } from "path";
@@ -12,15 +12,17 @@ import helmet from "helmet";
 import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
-import { initializeSocket } from "./lib/socket.js";
-import { connectDB } from "./lib/db.js";
-import userRoutes from "./routes/user.route.js";
-import adminRoutes from "./routes/admin.route.js";
-import authRoutes from "./routes/auth.route.js";
-import songRoutes from "./routes/song.route.js";
-import albumRoutes from "./routes/album.route.js";
-import statRoutes from "./routes/stat.route.js";
-import activityRoutes from "./routes/activity.route.js";
+
+// NOTE: imports are from src/, so they go up one directory:
+import { initializeSocket } from "../lib/socket.js";
+import { connectDB } from "../lib/db.js";
+import userRoutes from "../routes/user.route.js";
+import adminRoutes from "../routes/admin.route.js";
+import authRoutes from "../routes/auth.route.js";
+import songRoutes from "../routes/song.route.js";
+import albumRoutes from "../routes/album.route.js";
+import statRoutes from "../routes/stat.route.js";
+import activityRoutes from "../routes/activity.route.js";
 
 dotenv.config();
 
@@ -36,7 +38,7 @@ app.set("trust proxy", 1);
 // ---------- CORS ----------
 const normalizeUrl = (u) => {
   if (!u) return u;
-  let x = u.replace(/^['"]|['"]$/g, ""); // strip quotes if pasted in env
+  let x = u.replace(/^['"]|['"]$/g, ""); // strip quotes if pasted
   x = x.replace(/\/+$/, "");             // strip trailing slash
   return x;
 };
@@ -44,7 +46,7 @@ const normalizeUrl = (u) => {
 const FRONTEND_URL = normalizeUrl(process.env.FRONTEND_URL);
 const RENDER_URL   = normalizeUrl(process.env.RENDER_EXTERNAL_URL);
 
-// In prod (single service), calls are same-origin; CORS matters mainly for local dev
+// In prod (single service), calls are same-origin; CORS mainly for local dev
 const allowedOriginsArr = [
   "http://localhost:3000",
   "http://localhost:3001",
@@ -94,7 +96,8 @@ app.use(express.json({ limit: "10mb" }));
 app.use(
   fileUpload({
     useTempFiles: true,
-    tempFileDir: path.join(__dirname, "tmp"),
+    // we're inside backend/src → temp dir one level up in backend/tmp
+    tempFileDir: path.join(__dirname, "../tmp"),
     createParentPath: true,
     limits: { fileSize: 10 * 1024 * 1024 },
   })
@@ -126,8 +129,9 @@ app.use("/api/stats", statRoutes);
 app.use("/api/activity", activityRoutes);
 
 // ---------- Frontend Static (serve built app) ----------
+// We are inside backend/src, so the built frontend is ../../frontend/dist at runtime.
 const candidates = [
-  path.resolve(__dirname, "../frontend/dist"), // backend/ -> ../frontend/dist (monorepo)
+  path.resolve(__dirname, "../../frontend/dist"),
   path.resolve(process.cwd(), "frontend/dist"),
   path.resolve(process.cwd(), "dist"),
 ];
