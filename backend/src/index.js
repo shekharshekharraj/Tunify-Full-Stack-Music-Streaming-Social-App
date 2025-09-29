@@ -13,8 +13,6 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
 
-
-// NOTE: imports are from src/, so they go up one directory:
 import { initializeSocket } from "./lib/socket.js";
 import { connectDB } from "./lib/db.js";
 import userRoutes from "./routes/user.route.js";
@@ -26,6 +24,8 @@ import statRoutes from "./routes/stat.route.js";
 import activityRoutes from "./routes/activity.route.js";
 import aiChatRoutes from "./routes/ai.chat.route.js";
 import songSearchRoutes from "./routes/song.search.route.js";
+import partyRoutes from "./routes/party.route.js";
+import { initPartyNamespace } from "./lib/party.socket.js";
 
 dotenv.config();
 
@@ -35,21 +35,20 @@ const __dirname = dirname(__filename);
 const app = express();
 const PORT = process.env.PORT || 5000;
 
-// Render proxy (cookies, Clerk)
+// trust proxy (Render/Clerk etc.)
 app.set("trust proxy", 1);
 
 // ---------- CORS ----------
 const normalizeUrl = (u) => {
   if (!u) return u;
-  let x = u.replace(/^['"]|['"]$/g, ""); // strip quotes if pasted
-  x = x.replace(/\/+$/, "");             // strip trailing slash
+  let x = u.replace(/^['"]|['"]$/g, "");
+  x = x.replace(/\/+$/, "");
   return x;
 };
 
 const FRONTEND_URL = normalizeUrl(process.env.FRONTEND_URL);
 const RENDER_URL   = normalizeUrl(process.env.RENDER_EXTERNAL_URL);
 
-// In prod (single service), calls are same-origin; CORS mainly for local dev
 const allowedOriginsArr = [
   "http://localhost:3000",
   "http://localhost:3001",
@@ -89,29 +88,24 @@ app.options("*", cors(corsConfig));
 app.disable("x-powered-by");
 app.use(
   helmet({
-    contentSecurityPolicy: false, // enable and tune later if needed
+    contentSecurityPolicy: false,
     crossOriginResourcePolicy: { policy: "cross-origin" },
   })
 );
 app.use(process.env.NODE_ENV === "development" ? morgan("dev") : morgan("tiny"));
 app.use(compression());
+
+// Single JSON body parser (avoid duplicates)
 app.use(express.json({ limit: "10mb" }));
+
 app.use(
   fileUpload({
     useTempFiles: true,
-    // we're inside backend/src → temp dir one level up in backend/tmp
     tempFileDir: path.join(__dirname, "../tmp"),
     createParentPath: true,
     limits: { fileSize: 10 * 1024 * 1024 },
   })
 );
-
-// Ensure JSON body parsing:
-app.use(express.json({ limit: "10mb" }));
-
-// Mount the AI chat API:
-app.use("/api/ai", aiChatRoutes);
-app.use("/api/songs", songSearchRoutes);
 
 // ---------- Rate limit (API only) ----------
 const limiter = rateLimit({
@@ -125,21 +119,27 @@ app.use("/api", limiter);
 // ---------- Auth middleware (Clerk) ----------
 app.use(clerkMiddleware());
 
-// ---------- Health check ----------
+// ---------- Health ----------
 app.get("/api/health", (_req, res) => res.json({ ok: true }));
 app.get("/api/healthz", (_req, res) => res.json({ ok: true }));
 
 // ---------- API Routes ----------
+app.use("/api/ai", aiChatRoutes);
+
+// If songSearchRoutes only adds /search under /api/songs this order is fine:
+app.use("/api/songs", songSearchRoutes);
+app.use("/api/songs", songRoutes);
+
+app.use("/api/albums", albumRoutes);
 app.use("/api/users", userRoutes);
 app.use("/api/admin", adminRoutes);
 app.use("/api/auth", authRoutes);
-app.use("/api/songs", songRoutes);
-app.use("/api/albums", albumRoutes);
 app.use("/api/stats", statRoutes);
 app.use("/api/activity", activityRoutes);
 
-// ---------- Frontend Static (serve built app) ----------
-// We are inside backend/src, so the built frontend is ../../frontend/dist at runtime.
+app.use("/api/party", partyRoutes);
+
+// ---------- Frontend Static ----------
 const candidates = [
   path.resolve(__dirname, "../../frontend/dist"),
   path.resolve(process.cwd(), "frontend/dist"),
@@ -157,7 +157,17 @@ if (frontendDistPath) {
   console.warn("Frontend 'dist' directory not found. Frontend will not be served.");
 }
 
-// ---------- Centralized Error Handler ----------
+// ---------- Server Init ----------
+const httpServer = createServer(app);
+
+// Socket.IO must be created BEFORE we pass it to the party namespace:
+const io = initializeSocket(httpServer, allowedOriginsArr);
+app.set("io", io);
+
+// ✅ NOW we can initialize the watch-party namespace
+initPartyNamespace(io);
+
+// ---------- Error handler ----------
 app.use((err, req, res, next) => {
   const statusCode = err.statusCode || err.status || 500;
   const message = err.message || "Internal Server Error";
@@ -166,13 +176,6 @@ app.use((err, req, res, next) => {
   }
   res.status(statusCode).json({ success: false, message });
 });
-
-// ---------- Server Init ----------
-const httpServer = createServer(app);
-
-// align Socket.IO CORS with HTTP CORS
-const io = initializeSocket(httpServer, allowedOriginsArr);
-app.set("io", io);
 
 httpServer.listen(PORT, () => {
   console.log(`Server listening on ${PORT}`);

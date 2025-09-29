@@ -1,8 +1,8 @@
-// src/components/Topbar.tsx
-import React, { useEffect, useState } from "react";
+// frontend/src/components/Topbar.tsx
+import React, { useEffect, useState} from "react";
 import { SignedOut, UserButton, useUser, useAuth } from "@clerk/clerk-react";
-import { LayoutDashboardIcon } from "lucide-react";
-import { Link, useLocation } from "react-router-dom";
+import { LayoutDashboardIcon, Video } from "lucide-react";
+import { Link, useLocation, useNavigate } from "react-router-dom";
 import SignInOAuthButtons from "./SignInOAuthButtons";
 import { cn } from "@/lib/utils";
 import { buttonVariants } from "./ui/button";
@@ -15,12 +15,17 @@ export type TopbarProps = {
   setSearchQuery?: (query: string) => void;
 };
 
+function genPartyId() {
+  return Math.random().toString(36).slice(2, 8);
+}
+
 const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
   // Hide while fullscreen player is open
   const { isFullScreen } = usePlayerStore();
 
   const location = useLocation();
   const isHomePage = location.pathname === "/";
+  const navigate = useNavigate();
 
   const { isSignedIn, user } = useUser();
   const { isLoaded: authLoaded, getToken } = useAuth();
@@ -31,26 +36,23 @@ const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
     let mounted = true;
 
     (async () => {
-      // need an authenticated user & auth api ready
       if (!isSignedIn || !authLoaded) {
         if (mounted) setIsAdmin(false);
         return;
       }
-
       try {
-        // get a fresh Clerk JWT for THIS call
         const token = await getToken();
         const headers: Record<string, string> = { "Cache-Control": "no-cache" };
         if (token) headers.Authorization = `Bearer ${token}`;
 
-        const ts = Date.now(); // cache-buster
+        const ts = Date.now();
         const { data } = await axiosInstance.get(`/admin/is-admin?_=${ts}`, {
           headers,
           withCredentials: true,
         });
 
         if (mounted) setIsAdmin(!!data?.isAdmin);
-      } catch (_err) {
+      } catch {
         if (mounted) setIsAdmin(false);
       }
     })();
@@ -61,6 +63,10 @@ const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
   }, [isSignedIn, authLoaded, getToken, user?.id]);
 
   if (isFullScreen) return null;
+
+  const startParty = () => {
+    navigate(`/party/${genPartyId()}`);
+  };
 
   return (
     <header className="sticky top-0 z-50 bg-zinc-900/75 backdrop-blur supports-[backdrop-filter]:bg-zinc-900/60">
@@ -87,6 +93,20 @@ const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
 
           {/* Right actions */}
           <div className="flex items-center gap-3">
+            {/* Start Party button */}
+            <button
+              onClick={startParty}
+              className={cn(
+                "inline-flex items-center gap-2 h-9 sm:h-10 px-3 sm:px-4 rounded-md",
+                "bg-emerald-500/90 hover:bg-emerald-500 text-white",
+                "shadow-[0_10px_30px_rgba(16,185,129,0.35)] ring-1 ring-emerald-300/50 transition"
+              )}
+              aria-label="Start a watch party"
+            >
+              <Video className="size-4" />
+              <span className="hidden xs:inline">Start Party</span>
+            </button>
+
             {isAdmin && (
               <Link
                 to="/admin"
