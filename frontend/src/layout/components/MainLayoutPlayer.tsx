@@ -11,20 +11,24 @@ const MainLayoutPlayer: React.FC = () => {
 
   useEffect(() => {
     let audioEl = document.getElementById("global-audio") as HTMLAudioElement | null;
+
     if (!audioEl) {
       audioEl = document.createElement("audio");
       audioEl.id = "global-audio";
       audioEl.controls = false;
+      audioEl.preload = "metadata";
+      audioEl.setAttribute("playsinline", "true");
       try { audioEl.crossOrigin = "anonymous"; } catch {}
       document.body.appendChild(audioEl);
     } else {
       try { audioEl.crossOrigin = "anonymous"; } catch {}
+      audioEl.setAttribute("playsinline", "true");
+      if (!audioEl.preload) audioEl.preload = "metadata";
     }
 
     try {
       if (!createdRef.current) {
         const win = window as any;
-
         let ctx: AudioContext | null = win._GLOBAL_AUDIO_CONTEXT ?? null;
         let source: MediaElementAudioSourceNode | null = win._GLOBAL_MEDIA_SOURCE ?? null;
         let analyser: AnalyserNode | null = win._GLOBAL_ANALYSER ?? null;
@@ -33,18 +37,15 @@ const MainLayoutPlayer: React.FC = () => {
           ctx = new (window.AudioContext || (window as any).webkitAudioContext)();
           win._GLOBAL_AUDIO_CONTEXT = ctx;
         }
-
         if (!source && ctx && audioEl) {
           source = ctx.createMediaElementSource(audioEl);
           win._GLOBAL_MEDIA_SOURCE = source;
         }
-
         if (!analyser && ctx) {
           analyser = ctx.createAnalyser();
           analyser.fftSize = 256;
           win._GLOBAL_ANALYSER = analyser;
         }
-
         try {
           if (source && analyser && ctx) {
             source.connect(analyser);
@@ -63,7 +64,7 @@ const MainLayoutPlayer: React.FC = () => {
     }
   }, [setAudioNodes]);
 
-  // 🟢 Critical: Resume AudioContext on first user gesture after auth redirects
+  // Resume AudioContext on first gesture
   useEffect(() => {
     const win = window as any;
     const ctx: AudioContext | undefined = win._GLOBAL_AUDIO_CONTEXT;

@@ -13,6 +13,7 @@ import morgan from "morgan";
 import rateLimit from "express-rate-limit";
 import compression from "compression";
 
+
 // NOTE: imports are from src/, so they go up one directory:
 import { initializeSocket } from "./lib/socket.js";
 import { connectDB } from "./lib/db.js";
@@ -23,6 +24,8 @@ import songRoutes from "./routes/song.route.js";
 import albumRoutes from "./routes/album.route.js";
 import statRoutes from "./routes/stat.route.js";
 import activityRoutes from "./routes/activity.route.js";
+import aiChatRoutes from "./routes/ai.chat.route.js";
+import songSearchRoutes from "./routes/song.search.route.js";
 
 dotenv.config();
 
@@ -102,6 +105,13 @@ app.use(
     limits: { fileSize: 10 * 1024 * 1024 },
   })
 );
+
+// Ensure JSON body parsing:
+app.use(express.json({ limit: "10mb" }));
+
+// Mount the AI chat API:
+app.use("/api/ai", aiChatRoutes);
+app.use("/api/songs", songSearchRoutes);
 
 // ---------- Rate limit (API only) ----------
 const limiter = rateLimit({

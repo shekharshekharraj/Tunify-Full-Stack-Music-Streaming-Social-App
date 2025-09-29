@@ -1,129 +1,88 @@
-// src/components/AudioPlayer.tsx
 import { useEffect, useRef } from "react";
-import { usePlayerStore } from "@/stores/usePlayerStore";
+import { usePlayerStore, resumeAudioContext } from "@/stores/usePlayerStore";
 
-const AudioPlayer = () => {
-  const audioRef = useRef<HTMLAudioElement | null>(null);
-  const prevSongRef = useRef<string | null>(null);
-  const createdRef = useRef(false);
-
+/** Headless audio driver that syncs <audio id="global-audio"> with the store */
+export default function AudioPlayer() {
   const {
     currentSong,
     isPlaying,
+    setCurrentTime,
     playNext,
     repeatMode,
-    setAudioNodes,
     audioNodes,
   } = usePlayerStore();
 
-  useEffect(() => {
-    let audioEl = document.getElementById("global-audio") as HTMLAudioElement | null;
-
-    if (!audioEl) {
-      audioEl = document.createElement("audio");
-      audioEl.id = "global-audio";
-      audioEl.controls = false;
-      audioEl.preload = "metadata";
-      try {
-        audioEl.crossOrigin = "anonymous";
-        audioEl.setAttribute("crossorigin", "anonymous");
-      } catch {}
-      document.body.appendChild(audioEl);
-    } else {
-      try {
-        audioEl.crossOrigin = "anonymous";
-        audioEl.setAttribute("crossorigin", "anonymous");
-      } catch {}
-    }
-
-    audioRef.current = audioEl;
-
-    if (!createdRef.current) {
-      setAudioNodes({
-        audioElement: audioEl,
-        audioContext: audioNodes?.audioContext ?? null,
-        analyser: audioNodes?.analyser ?? null,
-        source: audioNodes?.source ?? null,
-      });
-      createdRef.current = true;
-    } else {
-      if (!audioNodes?.audioElement) {
-        setAudioNodes({ audioElement: audioEl });
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  const audioRef = useRef<HTMLAudioElement | null>(null);
 
   useEffect(() => {
-    const audio = audioRef.current;
-    if (!audio) return;
-    audio.loop = repeatMode === "one";
-  }, [repeatMode]);
+    const el =
+      audioNodes?.audioElement ??
+      (document.getElementById("global-audio") as HTMLAudioElement | null);
+    audioRef.current = el || null;
+  }, [audioNodes]);
 
+  // When song changes, set src and play (Cloudinary URL)
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    audio.onended = () => {
-      if (repeatMode === "one") {
-        try {
-          audio.currentTime = 0;
-          audio.play().catch(() => {});
-        } catch {}
-        return;
-      }
-      playNext();
-    };
+    const url = (currentSong as any)?.audioUrl;
+    if (!url) return;
 
-    return () => {
+    try { audio.crossOrigin = "anonymous"; } catch {}
+
+    if (audio.src !== url) {
+      try { audio.src = url; audio.preload = "auto"; } catch {}
+    }
+
+    (async () => {
       try {
-        if (audio) audio.onended = null;
+        await resumeAudioContext(audioNodes?.audioContext);
+        if (isPlaying) await audio.play().catch(()=>{});
       } catch {}
-    };
-  }, [playNext, repeatMode]);
+    })();
+  }, [currentSong?._id, (currentSong as any)?.audioUrl]);
 
+  // Respond to isPlaying toggles
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (isPlaying) {
-      audio.play().catch(() => {});
-    } else {
-      audio.pause();
-    }
+    (async () => {
+      try {
+        await resumeAudioContext(audioNodes?.audioContext);
+        if (isPlaying) await audio.play();
+        else audio.pause();
+      } catch {}
+    })();
   }, [isPlaying]);
 
+  // Track time + ended
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
 
-    if (!currentSong) {
-      try {
-        audio.removeAttribute("src");
-        audio.load();
-      } catch {}
-      prevSongRef.current = null;
-      return;
-    }
-
-    const isSongChange = prevSongRef.current !== currentSong.audioUrl;
-    if (isSongChange) {
-      try {
-        audio.crossOrigin = "anonymous";
-        audio.setAttribute("crossorigin", "anonymous");
-      } catch {}
-
-      audio.src = currentSong.audioUrl;
-      audio.currentTime = 0;
-      prevSongRef.current = currentSong.audioUrl;
-
-      if (isPlaying) {
-        audio.play().catch(() => {});
+    const onTime = () => setCurrentTime(audio.currentTime);
+    const onEnded = async () => {
+      if (repeatMode === "one") {
+        audio.currentTime = 0;
+        try { await audio.play(); } catch {}
+      } else {
+        playNext();
       }
-    }
-  }, [currentSong, isPlaying]);
+    };
+    const onError = () => console.warn("Audio error:", audio.error);
+
+    audio.addEventListener("timeupdate", onTime);
+    audio.addEventListener("ended", onEnded);
+    audio.addEventListener("error", onError);
+
+    return () => {
+      audio.removeEventListener("timeupdate", onTime);
+      audio.removeEventListener("ended", onEnded);
+      audio.removeEventListener("error", onError);
+    };
+  }, [setCurrentTime, playNext, repeatMode]);
 
   return null;
-};
-
-export default AudioPlayer;
+}

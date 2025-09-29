@@ -11,7 +11,6 @@ interface SocketAuth {
   [key: string]: any;
 }
 
-/** Audio nodes object stored in Zustand so multiple components can reuse it */
 export type AudioNodes = {
   audioElement?: HTMLAudioElement | null;
   audioContext?: AudioContext | null;
@@ -30,13 +29,16 @@ interface PlayerStore {
   repeatMode: RepeatMode;
   dominantColor: string;
 
-  // audio node sharing
   audioNodes: AudioNodes;
   setAudioNodes: (nodes: AudioNodes) => void;
 
   initializeQueue: (songs: Song[]) => void;
   playAlbum: (songs: Song[], startIndex?: number) => void;
   setCurrentSong: (song: Song | null) => void;
+
+  playSong: (song: Song) => Promise<void>;
+  queueSong: (song: Song) => void;
+
   togglePlay: () => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -60,24 +62,18 @@ export const usePlayerStore = create<PlayerStore>()(
       repeatMode: "off",
       dominantColor: "20,20,20",
 
-      // audio nodes initial state
       audioNodes: {},
       setAudioNodes: (nodes: AudioNodes) =>
         set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
 
       setCurrentTime: (time) => set({ currentTime: time }),
-
-      toggleLyrics: () => set((state) => ({ showLyrics: !state.showLyrics })),
-
-      toggleFullScreen: () =>
-        set((state) => ({ isFullScreen: !state.isFullScreen })),
-
+      toggleLyrics: () => set((s) => ({ showLyrics: !s.showLyrics })),
+      toggleFullScreen: () => set((s) => ({ isFullScreen: !s.isFullScreen })),
       setDominantColor: (color) => set({ dominantColor: color }),
-
       toggleRepeatMode: () => {
-        set((state) => {
-          if (state.repeatMode === "off") return { repeatMode: "queue" };
-          if (state.repeatMode === "queue") return { repeatMode: "one" };
+        set((s) => {
+          if (s.repeatMode === "off") return { repeatMode: "queue" };
+          if (s.repeatMode === "queue") return { repeatMode: "one" };
           return { repeatMode: "off" };
         });
       },
@@ -94,7 +90,7 @@ export const usePlayerStore = create<PlayerStore>()(
         if (songs.length === 0) return;
         const song = songs[startIndex];
 
-        axiosInstance.post("/activity/log-listen", { songId: song._id });
+        axiosInstance.post("/activity/log-listen", { songId: (song as any)._id }).catch(() => {});
 
         const socket = useChatStore.getState().socket;
         if (socket?.auth) {
@@ -103,6 +99,13 @@ export const usePlayerStore = create<PlayerStore>()(
             userId: auth.userId,
             activity: `Playing ${song.title} by ${song.artist}`,
           });
+        }
+
+        const audio = get().audioNodes?.audioElement ??
+          (document.getElementById("global-audio") as HTMLAudioElement | null);
+        if (audio && (song as any).audioUrl) {
+          try { audio.crossOrigin = "anonymous"; } catch {}
+          try { audio.src = (song as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
         }
 
         set({ queue: songs, currentSong: song, currentIndex: startIndex, isPlaying: true });
@@ -111,8 +114,8 @@ export const usePlayerStore = create<PlayerStore>()(
       setCurrentSong: (song) => {
         if (!song) return;
 
-        if (get().currentSong?._id !== song._id) {
-          axiosInstance.post("/activity/log-listen", { songId: song._id });
+        if (get().currentSong?._id !== (song as any)._id) {
+          axiosInstance.post("/activity/log-listen", { songId: (song as any)._id }).catch(() => {});
         }
 
         const socket = useChatStore.getState().socket;
@@ -124,12 +127,71 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
-        const songIndex = get().queue.findIndex((s) => s._id === song._id);
+        const songIndex = get().queue.findIndex((s) => (s as any)._id === (song as any)._id);
+
+        const audio = get().audioNodes?.audioElement ??
+          (document.getElementById("global-audio") as HTMLAudioElement | null);
+        if (audio && (song as any).audioUrl) {
+          try { audio.crossOrigin = "anonymous"; } catch {}
+          try { audio.src = (song as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
+        }
+
         set({
           currentSong: song,
           isPlaying: true,
           currentIndex: songIndex !== -1 ? songIndex : get().currentIndex,
         });
+      },
+
+      playSong: async (song) => {
+        if (!song) return;
+
+        const { queue } = get();
+        let nextQueue = queue;
+        let idx = queue.findIndex((s) => (s as any)._id === (song as any)._id);
+        if (idx === -1) {
+          nextQueue = [...queue, song];
+          idx = nextQueue.length - 1;
+        }
+
+        try { await axiosInstance.post("/activity/log-listen", { songId: (song as any)._id }); } catch {}
+
+        const socket = useChatStore.getState().socket;
+        if (socket?.auth) {
+          const auth = socket.auth as SocketAuth;
+          socket.emit("update_activity", {
+            userId: auth.userId,
+            activity: `Playing ${song.title} by ${song.artist}`,
+          });
+        }
+
+        const audio = get().audioNodes?.audioElement ??
+          (document.getElementById("global-audio") as HTMLAudioElement | null);
+
+        if (audio && (song as any).audioUrl) {
+          try { audio.crossOrigin = "anonymous"; } catch {}
+          try {
+            const ctx = get().audioNodes?.audioContext;
+            if (ctx && ctx.state === "suspended") await ctx.resume();
+          } catch {}
+          try { audio.src = (song as any).audioUrl; audio.preload = "auto"; await audio.play(); } catch {}
+        }
+
+        set({
+          queue: nextQueue,
+          currentSong: song,
+          currentIndex: idx === -1 ? 0 : idx,
+          isPlaying: true,
+        });
+      },
+
+      queueSong: (song) => {
+        if (!song) return;
+        const { queue, currentSong } = get();
+        if (queue.some((s) => (s as any)._id === (song as any)._id)) return;
+        const nextQueue = [...queue, song];
+        set({ queue: nextQueue });
+        if (!currentSong) get().playSong(song);
       },
 
       togglePlay: () => {
@@ -146,6 +208,14 @@ export const usePlayerStore = create<PlayerStore>()(
                 : "Idle",
           });
         }
+
+        const audio = get().audioNodes?.audioElement ??
+          (document.getElementById("global-audio") as HTMLAudioElement | null);
+        if (audio) {
+          if (willStartPlaying) audio.play().catch(()=>{});
+          else audio.pause();
+        }
+
         set({ isPlaying: willStartPlaying });
       },
 
@@ -166,7 +236,7 @@ export const usePlayerStore = create<PlayerStore>()(
         const nextIndex = isLastSong ? 0 : currentIndex + 1;
         const nextSong = queue[nextIndex];
 
-        axiosInstance.post("/activity/log-listen", { songId: nextSong._id });
+        axiosInstance.post("/activity/log-listen", { songId: (nextSong as any)._id }).catch(() => {});
 
         const socket = useChatStore.getState().socket;
         if (socket?.auth) {
@@ -175,6 +245,13 @@ export const usePlayerStore = create<PlayerStore>()(
             userId: auth.userId,
             activity: `Playing ${nextSong.title} by ${nextSong.artist}`,
           });
+        }
+
+        const audio = get().audioNodes?.audioElement ??
+          (document.getElementById("global-audio") as HTMLAudioElement | null);
+        if (audio && (nextSong as any).audioUrl) {
+          try { audio.crossOrigin = "anonymous"; } catch {}
+          try { audio.src = (nextSong as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
         }
 
         set({ currentSong: nextSong, currentIndex: nextIndex, isPlaying: true });
@@ -186,7 +263,7 @@ export const usePlayerStore = create<PlayerStore>()(
         if (prevIndex >= 0) {
           const prevSong = queue[prevIndex];
 
-          axiosInstance.post("/activity/log-listen", { songId: prevSong._id });
+          axiosInstance.post("/activity/log-listen", { songId: (prevSong as any)._id }).catch(() => {});
 
           const socket = useChatStore.getState().socket;
           if (socket?.auth) {
@@ -196,13 +273,20 @@ export const usePlayerStore = create<PlayerStore>()(
               activity: `Playing ${prevSong.title} by ${prevSong.artist}`,
             });
           }
+
+          const audio = get().audioNodes?.audioElement ??
+            (document.getElementById("global-audio") as HTMLAudioElement | null);
+          if (audio && (prevSong as any).audioUrl) {
+            try { audio.crossOrigin = "anonymous"; } catch {}
+            try { audio.src = (prevSong as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
+          }
+
           set({ currentSong: prevSong, currentIndex: prevIndex, isPlaying: true });
         }
       },
     }),
     {
       name: "player-storage",
-      // Do not persist audioNodes (browser objects)
       partialize: (state) =>
         Object.fromEntries(
           Object.entries(state).filter(([key]) => !["audioNodes"].includes(key))
@@ -211,12 +295,7 @@ export const usePlayerStore = create<PlayerStore>()(
   )
 );
 
-/** Helper to safely resume an AudioContext (fixes playback after auth redirects) */
 export async function resumeAudioContext(ctx?: AudioContext | null) {
   if (!ctx) return;
-  try {
-    if (ctx.state === "suspended") {
-      await ctx.resume();
-    }
-  } catch {}
+  try { if (ctx.state === "suspended") await ctx.resume(); } catch {}
 }

@@ -131,7 +131,7 @@ const LyricsView = () => {
       <div className="sticky top-0 z-10 px-5 pt-4 pb-3 bg-black/35 backdrop-blur-md border-b border-white/10">
         <div className="flex items-center justify-between">
           <h2 className="text-lg font-semibold tracking-wide text-zinc-100">
-            {isFs ? "Lyrics — Fullscreen" : "Lyrics"}
+            {"Lyrics"}
           </h2>
           <div className="flex items-center gap-2">
             <button className="p-1.5 rounded-lg bg-white/5 hover:bg-white/10 text-zinc-300" onClick={decFont} title="Decrease text size">
