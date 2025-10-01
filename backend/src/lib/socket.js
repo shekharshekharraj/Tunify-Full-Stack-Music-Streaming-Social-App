@@ -1,4 +1,3 @@
-// backend/src/lib/socket.js
 import { Server } from "socket.io";
 import { Message } from "../models/message.model.js";
 import { User } from "../models/user.model.js";
@@ -18,11 +17,14 @@ export const initializeSocket = (server, allowedOriginsArr = []) => {
     transports: ["websocket", "polling"],
   });
 
+  // Root namespace ("/") — OPTIONAL chat features
   io.on("connection", (socket) => {
     const clerkUserId = socket.handshake?.auth?.userId;
+
+    // If no Clerk user, do NOT disconnect — just skip DM features.
     if (!clerkUserId) {
-      socket.emit("error", "Unauthorized: missing userId in socket auth");
-      return socket.disconnect();
+      socket.emit("info", "Connected to root namespace without Clerk auth — party features use /party.");
+      return;
     }
 
     userSockets.set(clerkUserId, socket.id);
@@ -39,7 +41,7 @@ export const initializeSocket = (server, allowedOriginsArr = []) => {
 
     socket.on("send_message", async (data) => {
       try {
-        const { senderId, receiverId, content } = data; // Mongo IDs
+        const { senderId, receiverId, content } = data;
         if (!senderId || !receiverId || !content) return;
 
         const receiverUser = await User.findById(receiverId).select("clerkId");

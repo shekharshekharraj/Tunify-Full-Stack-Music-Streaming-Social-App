@@ -18,6 +18,15 @@ export type AudioNodes = {
   source?: MediaElementAudioSourceNode | null;
 };
 
+type PartyMeta = {
+  id?: string | null;
+  title?: string | null;
+  artist?: string | null;
+  coverUrl?: string | null;
+  durationMs?: number | null;
+  audioUrl?: string | null;
+};
+
 interface PlayerStore {
   currentSong: Song | null;
   isPlaying: boolean;
@@ -31,6 +40,9 @@ interface PlayerStore {
 
   audioNodes: AudioNodes;
   setAudioNodes: (nodes: AudioNodes) => void;
+
+  // NEW: follower can mirror remote metadata quickly (UI only)
+  setFromPartyMeta: (meta: PartyMeta) => void;
 
   initializeQueue: (songs: Song[]) => void;
   playAlbum: (songs: Song[], startIndex?: number) => void;
@@ -65,6 +77,31 @@ export const usePlayerStore = create<PlayerStore>()(
       audioNodes: {},
       setAudioNodes: (nodes: AudioNodes) =>
         set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
+
+      // --- NEW: merge remote (leader) metadata for follower UI ---
+      setFromPartyMeta: (meta) => {
+        const prev = (get().currentSong || {}) as any;
+        const merged = {
+          ...prev,
+          id: meta.id ?? prev.id,
+          _id: prev._id ?? meta.id ?? prev._id, // keep your Mongo id untouched
+          title: meta.title ?? prev.title,
+          name: meta.title ?? prev.name,
+          artist: meta.artist ?? prev.artist,
+          artists: prev.artists ?? (meta.artist ? [meta.artist] : prev.artists),
+
+          // ✅ keep store consistent while following
+          imageUrl: meta.coverUrl ?? prev.imageUrl, // mirror Party cover into your model field
+          coverUrl: meta.coverUrl ?? prev.coverUrl,
+          image: meta.coverUrl ?? prev.image,
+          artworkUrl: meta.coverUrl ?? prev.artworkUrl,
+
+          durationMs: meta.durationMs ?? prev.durationMs,
+          duration: meta.durationMs ?? prev.duration,
+          audioUrl: meta.audioUrl ?? prev.audioUrl,
+        };
+        set({ currentSong: merged as Song });
+      },
 
       setCurrentTime: (time) => set({ currentTime: time }),
       toggleLyrics: () => set((s) => ({ showLyrics: !s.showLyrics })),
@@ -101,11 +138,16 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
-        const audio = get().audioNodes?.audioElement ??
+        const audio =
+          get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
         if (audio && (song as any).audioUrl) {
           try { audio.crossOrigin = "anonymous"; } catch {}
-          try { audio.src = (song as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
+          try {
+            audio.src = (song as any).audioUrl;
+            audio.preload = "auto";
+            audio.play().catch(() => {});
+          } catch {}
         }
 
         set({ queue: songs, currentSong: song, currentIndex: startIndex, isPlaying: true });
@@ -129,11 +171,16 @@ export const usePlayerStore = create<PlayerStore>()(
 
         const songIndex = get().queue.findIndex((s) => (s as any)._id === (song as any)._id);
 
-        const audio = get().audioNodes?.audioElement ??
+        const audio =
+          get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
         if (audio && (song as any).audioUrl) {
           try { audio.crossOrigin = "anonymous"; } catch {}
-          try { audio.src = (song as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
+          try {
+            audio.src = (song as any).audioUrl;
+            audio.preload = "auto";
+            audio.play().catch(() => {});
+          } catch {}
         }
 
         set({
@@ -165,7 +212,8 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
-        const audio = get().audioNodes?.audioElement ??
+        const audio =
+          get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
 
         if (audio && (song as any).audioUrl) {
@@ -174,7 +222,11 @@ export const usePlayerStore = create<PlayerStore>()(
             const ctx = get().audioNodes?.audioContext;
             if (ctx && ctx.state === "suspended") await ctx.resume();
           } catch {}
-          try { audio.src = (song as any).audioUrl; audio.preload = "auto"; await audio.play(); } catch {}
+          try {
+            audio.src = (song as any).audioUrl;
+            audio.preload = "auto";
+            await audio.play();
+          } catch {}
         }
 
         set({
@@ -209,10 +261,11 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
-        const audio = get().audioNodes?.audioElement ??
+        const audio =
+          get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
         if (audio) {
-          if (willStartPlaying) audio.play().catch(()=>{});
+          if (willStartPlaying) audio.play().catch(() => {});
           else audio.pause();
         }
 
@@ -247,11 +300,16 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
-        const audio = get().audioNodes?.audioElement ??
+        const audio =
+          get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
         if (audio && (nextSong as any).audioUrl) {
           try { audio.crossOrigin = "anonymous"; } catch {}
-          try { audio.src = (nextSong as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
+          try {
+            audio.src = (nextSong as any).audioUrl;
+            audio.preload = "auto";
+            audio.play().catch(() => {});
+          } catch {}
         }
 
         set({ currentSong: nextSong, currentIndex: nextIndex, isPlaying: true });
@@ -274,11 +332,16 @@ export const usePlayerStore = create<PlayerStore>()(
             });
           }
 
-          const audio = get().audioNodes?.audioElement ??
+          const audio =
+            get().audioNodes?.audioElement ??
             (document.getElementById("global-audio") as HTMLAudioElement | null);
           if (audio && (prevSong as any).audioUrl) {
             try { audio.crossOrigin = "anonymous"; } catch {}
-            try { audio.src = (prevSong as any).audioUrl; audio.preload = "auto"; audio.play().catch(()=>{}); } catch {}
+            try {
+              audio.src = (prevSong as any).audioUrl;
+              audio.preload = "auto";
+              audio.play().catch(() => {});
+            } catch {}
           }
 
           set({ currentSong: prevSong, currentIndex: prevIndex, isPlaying: true });
