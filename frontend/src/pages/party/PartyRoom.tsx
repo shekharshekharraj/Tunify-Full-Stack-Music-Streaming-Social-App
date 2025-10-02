@@ -175,6 +175,12 @@ export default function PartyRoom() {
 
   const [tab, setTab] = useState<"chat" | "reactions">("chat");
 
+  // ===== Build a canonical share URL that always forces follower role =====
+  const shareUrl = useMemo(() => {
+    if (!partyId) return window.location.href; // fallback
+    return `${window.location.origin}/party/${encodeURIComponent(partyId)}?role=follower`;
+  }, [partyId]);
+
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
       {/* Top bar with Tunify logo (left) and call controls (right) */}
@@ -243,13 +249,13 @@ export default function PartyRoom() {
       </div>
 
       <p className="text-sm text-zinc-500 mt-3">
-        Share this link with a friend to sync playback & talk:
+        Share this follower link with a friend to sync playback & talk:
         <br />
-        <a className="text-emerald-400 break-all" href={window.location.href} target="_blank" rel="noreferrer">
-          {window.location.href}
+        <a className="text-emerald-400 break-all" href={shareUrl} target="_blank" rel="noreferrer">
+          {shareUrl}
         </a>
         <br />
-        Tip: send them the same URL but with <code>?role=follower</code> if you want to be the leader.
+        (This link always opens the room as a <code>follower</code>.)
       </p>
 
       <div className="mt-6">
