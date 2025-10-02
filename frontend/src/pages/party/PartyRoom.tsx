@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { useParams, useSearchParams } from "react-router-dom";
+import { Link, useParams, useSearchParams } from "react-router-dom";
 import { io, Socket } from "socket.io-client";
 import { Button } from "@/components/ui/button";
 import { usePlayerStore } from "@/stores/usePlayerStore";
@@ -11,7 +11,7 @@ import PartyReactions from "@/components/party/PartyReactions";
 
 const SOCKET_BASE =
   (import.meta.env.VITE_SOCKET_URL && String(import.meta.env.VITE_SOCKET_URL).trim()) ||
-  "http://localhost:5000"; // your backend
+  "http://localhost:5000";
 
 type Role = "leader" | "follower";
 type PresenceUsers = { id?: string }[];
@@ -22,54 +22,30 @@ type EmojiEvent = { emoji: string };
 // -------- helpers: find & normalize cover URL --------
 function pickCoverUrl(t: any): string | null {
   if (!t) return null;
-
-  // ✅ your model has imageUrl — prefer it first
   const direct =
-    t.imageUrl ||
-    t.coverUrl ||
-    t.image ||
-    t.artworkUrl ||
-    t.thumbnail ||
-    t.thumbnailUrl ||
-    t.picture;
+    t.imageUrl || t.coverUrl || t.image || t.artworkUrl || t.thumbnail || t.thumbnailUrl || t.picture;
   if (typeof direct === "string" && direct.trim()) return direct.trim();
-
-  // nested objects with url
   if (t.image?.url) return t.image.url;
   if (t.cover?.url) return t.cover.url;
   if (t.artwork?.url) return t.artwork.url;
-
-  // spotify-like album.images
   if (Array.isArray(t.album?.images) && t.album.images.length) {
     const img = t.album.images.find((x: any) => x?.url) || t.album.images[0];
     if (img?.url) return img.url;
   }
-
-  // other metadata shims
   if (t.metadata?.image) return t.metadata.image;
   if (t.meta?.image) return t.meta.image;
-
-  // soundcloud-like
   if (t.artwork_url) return t.artwork_url;
   if (t.user?.avatar_url) return t.user.avatar_url;
-
   return null;
 }
 
 function normalizeCoverUrl(u: string | null): string | null {
   if (!u) return null;
   const url = u.trim();
-
-  // followers cannot use blob: URLs generated in leader tab
   if (url.startsWith("blob:")) return null;
-
-  // expand same-origin relative paths
   if (url.startsWith("/")) return `${window.location.origin}${url}`;
-
-  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) {
-    return url;
-  }
-  return null; // file:, chrome-extension:, etc. are not portable
+  if (url.startsWith("http://") || url.startsWith("https://") || url.startsWith("data:")) return url;
+  return null;
 }
 // -----------------------------------------------------
 
@@ -80,7 +56,6 @@ export default function PartyRoom() {
   const partyId = ((params.partyId || (params as any).codeOrId || "") as string).trim();
   const role: Role = search.get("role") === "follower" ? "follower" : "leader";
 
-  // also grab queue + currentIndex so we mirror the footer’s source of truth
   const { audioNodes, currentSong, queue, currentIndex, setFromPartyMeta } =
     usePlayerStore() as any;
 
@@ -89,17 +64,14 @@ export default function PartyRoom() {
   if (!socketRef.current) {
     socketRef.current = io(`${SOCKET_BASE}/party`, {
       path: "/socket.io",
-      transports: ["websocket", "polling"], // allow polling fallback
+      transports: ["websocket", "polling"],
       withCredentials: true,
       autoConnect: false,
       reconnection: true,
       reconnectionAttempts: 10,
       reconnectionDelay: 600,
     });
-
-    // optional helpful logs
     socketRef.current.on("connect_error", (err) => {
-      // eslint-disable-next-line no-console
       console.warn("[party] connect_error:", err?.message, err);
     });
   }
@@ -155,7 +127,6 @@ export default function PartyRoom() {
     (document.getElementById("global-audio") as HTMLAudioElement | null);
 
   const getLeaderTrackObject = () => {
-    // pick the exact object the footer likely uses
     return (
       currentSong ??
       (Array.isArray(queue) ? queue[currentIndex] : null) ??
@@ -184,17 +155,14 @@ export default function PartyRoom() {
     };
   };
 
-  // Music sync + track for stage
   const sync = usePartySync(socket, partyId, role, getAudioEl, getTrackInfo);
 
-  // Reflect leader’s meta in follower store (optional)
   useEffect(() => {
     if (role !== "follower") return;
     if (!sync.track) return;
     setFromPartyMeta?.(sync.track);
   }, [role, sync.track, setFromPartyMeta]);
 
-  // WebRTC voice/video
   const {
     startCall,
     endCall,
@@ -209,13 +177,26 @@ export default function PartyRoom() {
 
   return (
     <div className="mx-auto w-full max-w-6xl px-4 py-6">
+      {/* Top bar with Tunify logo (left) and call controls (right) */}
       <div className="flex items-center justify-between mb-4">
-        <h1 className="text-xl font-semibold">
-          Watch Party: {partyId || "—"}{" "}
-          <span className="ml-2 rounded bg-zinc-800 px-2 py-0.5 text-xs align-middle">
-            {role} • {participantCount} in room
-          </span>
-        </h1>
+        <div className="flex items-center gap-3">
+          <Link to="/" className="flex items-center gap-2 group" aria-label="Go to Tunify Home">
+            <img
+              src="/Tunify.png"
+              alt="Tunify"
+              className="h-7 w-auto rounded-[6px] shadow-sm"
+              draggable={false}
+            />
+            <span className="text-white font-semibold tracking-tight">Tunify</span>
+          </Link>
+
+          <h1 className="text-xl font-semibold">
+            Watch Party: {partyId || "—"}{" "}
+            <span className="ml-2 rounded bg-zinc-800 px-2 py-0.5 text-xs align-middle">
+              {role} • {participantCount} in room
+            </span>
+          </h1>
+        </div>
 
         <div className="flex gap-2">
           {!isCalling ? (
