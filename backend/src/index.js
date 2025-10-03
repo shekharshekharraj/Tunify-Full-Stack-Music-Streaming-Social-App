@@ -50,7 +50,8 @@ const allowedOriginsArr = [
   "http://127.0.0.1:3000",
   "http://127.0.0.1:3001",
   "http://127.0.0.1:3002",
-  "http://localhost:5000",             // ← same-origin when serving frontend from backend
+  "http://localhost:5000",
+  "https://www.tunify.co.in",             // ← same-origin when serving frontend from backend
   FRONTEND_URL,
   RENDER_URL,
 ].filter(Boolean);
