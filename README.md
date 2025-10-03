@@ -2,7 +2,7 @@
 
 **Built Tunify, a feature-rich full-stack music streaming platform that blends a seamless audio player with a real-time social layer.** Users can stream songs, enjoy synchronized party rooms, chat in real time, view LRC-synced lyrics, and interact with an AI chatbot powered by Gemini for smart music recommendations.
 
-🔗 **Live Demo:** [Tunify on Render](https://tunify-full-stack-music-streaming-social.onrender.com)
+🔗 **Live Demo:** [www.tunify.co.in]
 
 ---
 
