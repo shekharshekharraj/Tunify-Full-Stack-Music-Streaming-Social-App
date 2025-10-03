@@ -1,17 +1,17 @@
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { useEffect, useRef, useCallback } from "react";
+import { useEffect, useRef, useCallback, useMemo, useState } from "react";
+import FullscreenDock from "@/components/player/FullscreenDock";
 import ColorThief from "colorthief";
 
-const clampRGB = (rgb: string) => {
-  const [r, g, b] = (rgb || "20,20,20")
+/* ---------- Color helpers ---------- */
+const clampRGB = (rgb: string) =>
+  (rgb || "20,20,20")
     .split(",")
-    .map((n) => Math.max(0, Math.min(255, Number(n) || 0)));
-  return `${r},${g},${b}`;
-};
+    .map((n) => Math.max(0, Math.min(255, Number(n) || 0)))
+    .join(",");
 
-/* ---------- Color helpers (accent over dominant) ---------- */
 function rgbToHsl(r: number, g: number, b: number) {
   r /= 255; g /= 255; b /= 255;
   const max = Math.max(r, g, b), min = Math.min(r, g, b);
@@ -26,37 +26,29 @@ function rgbToHsl(r: number, g: number, b: number) {
     }
     h /= 6;
   }
-  return { h, s, l }; // [0..1]
+  return { h, s, l };
 }
-
 function pickAccentFromPalette(palette: number[][]) {
-  // Prefer vibrant (high saturation) & mid-luma; ignore near-grays and extremes
   let best: number[] | null = null;
   let bestScore = -1;
   for (const c of palette) {
     const [r, g, b] = c;
-    const { s, l } = rgbToHsl(r, g, b);
-    if (s < 0.18) continue;              // drop grays
-    if (l < 0.15 || l > 0.85) continue;  // drop too dark/bright
-    // slight bonus for “cool” hues (blue/teal) so covers skew blue if close
-    const coolBonus = (() => {
-      const { h } = rgbToHsl(r, g, b);
-      const deg = h * 360;
-      return deg >= 190 && deg <= 245 ? 0.05 : 0;
-    })();
+    const { h, s, l } = rgbToHsl(r, g, b);
+    if (s < 0.18) continue;
+    if (l < 0.15 || l > 0.85) continue;
+    const deg = h * 360;
+    const coolBonus = deg >= 190 && deg <= 245 ? 0.05 : 0;
     const score = s * (1 - Math.abs(l - 0.5)) + coolBonus;
     if (score > bestScore) { bestScore = score; best = c; }
   }
-  return best; // may be null
+  return best;
 }
-
 function averageCenterColor(img: HTMLImageElement) {
   const canvas = document.createElement("canvas");
   const w = (canvas.width = Math.max(120, Math.min(600, img.naturalWidth)));
   const h = (canvas.height = Math.max(120, Math.min(600, img.naturalHeight)));
   const ctx = canvas.getContext("2d")!;
   ctx.drawImage(img, 0, 0, w, h);
-  // center 60% crop
   const sx = Math.floor(w * 0.2), sy = Math.floor(h * 0.2);
   const sw = Math.floor(w * 0.6), sh = Math.floor(h * 0.6);
   const data = ctx.getImageData(sx, sy, sw, sh).data;
@@ -66,9 +58,9 @@ function averageCenterColor(img: HTMLImageElement) {
   }
   return [Math.round(r / n), Math.round(g / n), Math.round(b / n)] as [number, number, number];
 }
-/* --------------------------------------------------------- */
+/* ----------------------------------- */
 
-const FullScreenPlayer = () => {
+export default function FullScreenPlayer() {
   const {
     currentSong,
     isFullScreen,
@@ -81,7 +73,99 @@ const FullScreenPlayer = () => {
 
   const playerRef = useRef<HTMLDivElement>(null);
 
-  // Fullscreen sync
+  /* ====== Dock + Cursor logic ====== */
+  const [dockVisible, setDockVisible] = useState(false);
+  const [cursorHidden, setCursorHidden] = useState(false);
+
+  const hideTimerRef = useRef<number | null>(null);
+  const showTimerRef = useRef<number | null>(null);
+  const insideDockRef = useRef(false);
+  const rafRef = useRef<number | null>(null);
+  const lastPointerY = useRef<number>(window.innerHeight);
+
+  const SHOW_THRESHOLD = 160;
+  const HIDE_THRESHOLD = 240;
+  const SHOW_DELAY = 120;
+  const HIDE_DELAY = 900;
+
+  const clearTimers = () => {
+    if (hideTimerRef.current) { window.clearTimeout(hideTimerRef.current); hideTimerRef.current = null; }
+    if (showTimerRef.current) { window.clearTimeout(showTimerRef.current); showTimerRef.current = null; }
+  };
+
+  const scheduleHide = () => {
+    if (insideDockRef.current) return;
+    if (hideTimerRef.current) return;
+    hideTimerRef.current = window.setTimeout(() => {
+      if (!insideDockRef.current) {
+        setDockVisible(false);
+        setCursorHidden(true); // ⬅️ hide cursor when dock hides
+      }
+      hideTimerRef.current = null;
+    }, HIDE_DELAY) as unknown as number;
+  };
+
+  const scheduleShow = () => {
+    if (showTimerRef.current) return;
+    showTimerRef.current = window.setTimeout(() => {
+      clearTimers();
+      setDockVisible(true);
+      setCursorHidden(false); // ⬅️ ensure cursor visible with dock
+    }, SHOW_DELAY) as unknown as number;
+  };
+
+  const onPointerMove = useCallback((e: PointerEvent) => {
+    if (!isFullScreen) return;
+    lastPointerY.current = e.clientY;
+
+    // Any pointer move should show cursor immediately
+    if (cursorHidden) setCursorHidden(false);
+
+    if (rafRef.current) return;
+    rafRef.current = requestAnimationFrame(() => {
+      rafRef.current = null;
+      const y = lastPointerY.current;
+      const winH = window.innerHeight;
+      const distFromBottom = winH - y;
+
+      if (distFromBottom <= SHOW_THRESHOLD) {
+        scheduleShow();
+      } else if (distFromBottom > HIDE_THRESHOLD) {
+        scheduleHide();
+      }
+    });
+  }, [isFullScreen, cursorHidden]);
+
+  const onMouseSafe = (isInside: boolean) => {
+    insideDockRef.current = isInside;
+    if (isInside) {
+      clearTimers();
+      setDockVisible(true);
+      setCursorHidden(false);
+    } else {
+      scheduleHide();
+    }
+  };
+
+  useEffect(() => {
+    if (!isFullScreen) {
+      setDockVisible(false);
+      setCursorHidden(false);
+      clearTimers();
+      return;
+    }
+    window.addEventListener("pointermove", onPointerMove, { passive: true });
+    return () => window.removeEventListener("pointermove", onPointerMove);
+  }, [isFullScreen, onPointerMove]);
+
+  useEffect(() => {
+    return () => {
+      clearTimers();
+      if (rafRef.current) cancelAnimationFrame(rafRef.current);
+    };
+  }, []);
+
+  /* ====== Fullscreen API sync ====== */
   const requestFullScreenOnUserGesture = useCallback(() => {
     if (playerRef.current?.requestFullscreen) playerRef.current.requestFullscreen();
   }, []);
@@ -100,7 +184,7 @@ const FullScreenPlayer = () => {
     if (!isFullScreen && document.fullscreenElement) exitFullScreen();
   }, [isFullScreen, exitFullScreen]);
 
-  // Accent color extraction (palette-based with fallback)
+  /* ====== Accent color extraction ====== */
   useEffect(() => {
     const url = currentSong?.imageUrl;
     if (!url) {
@@ -128,13 +212,16 @@ const FullScreenPlayer = () => {
     img.onerror = () => setDominantColor("20,20,20");
   }, [currentSong?.imageUrl, setDominantColor]);
 
-  // Keyboard shortcuts (Space, ←/→)
+  /* ====== Keyboard shortcuts (Space, ←/→) ====== */
   useEffect(() => {
     if (!isFullScreen) return;
     const key = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
+        // interaction -> make cursor visible + show dock briefly
+        setCursorHidden(false);
+        setDockVisible(true);
       } else if (e.code === "ArrowRight") {
         const a = audioNodes.audioElement;
         if (a) a.currentTime = Math.min((a.currentTime || 0) + 5, a.duration || a.currentTime);
@@ -149,13 +236,18 @@ const FullScreenPlayer = () => {
 
   if (!isFullScreen || !currentSong) return null;
 
-  const rgb = clampRGB(dominantColor);
+  const rgb = useMemo(() => clampRGB(dominantColor), [dominantColor]);
   const bgSolid = `rgb(${rgb})`;
-  // slight darkening overlay for readability across bright covers
   const bgWithSoftDarken = `linear-gradient(rgba(0,0,0,0.12), rgba(0,0,0,0.12)), ${bgSolid}`;
 
   return (
-    <div ref={playerRef} className="fixed inset-0 z-[70] flex items-center justify-center overflow-hidden">
+    <div
+      ref={playerRef}
+      className={[
+        "fixed inset-0 z-[70] flex items-center justify-center overflow-hidden",
+        cursorHidden ? "cursor-none" : "cursor-auto", // ⬅️ hide/show cursor
+      ].join(" ")}
+    >
       {/* Solid accent background */}
       <div className="absolute inset-0 -z-10" style={{ background: bgWithSoftDarken }} />
 
@@ -192,8 +284,16 @@ const FullScreenPlayer = () => {
           </div>
         </div>
       </div>
+
+      {/* Smooth slide-up dock */}
+      <FullscreenDock
+        visible={dockVisible}
+        onMouseSafe={(inside) => {
+          onMouseSafe(inside);
+          // cursor visible while interacting with dock
+          setCursorHidden(!inside && !dockVisible);
+        }}
+      />
     </div>
   );
-};
-
-export default FullScreenPlayer;
+}
