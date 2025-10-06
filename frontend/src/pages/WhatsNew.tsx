@@ -1,185 +1,312 @@
 // src/pages/WhatsNew.tsx
-import { useMemo, useState } from "react";
-import { Play, Plus } from "lucide-react";
-import { cn } from "@/lib/utils";
-// If you want to wire to your player store, import it and use it in onPlay
-// import { usePlayerStore } from "@/stores/usePlayerStore";
+import { useEffect, useRef, useState } from "react";
+import type { NewRelease } from "@/types/whatsnew";
+import { Sparkles, Rocket, Wand2, Bug, Video, Megaphone } from "lucide-react";
+import { axiosInstance } from "@/lib/axios"; // try API first
+import { Link } from "react-router-dom";
 
-type ReleaseType = "single" | "album" | "podcast";
-
-type NewRelease = {
-  id: string;
-  type: ReleaseType;
-  title: string;
-  artists: string;
-  coverUrl: string;
-  releasedAgo: string; // e.g., "2 weeks ago"
-  // Optional fields to hook into your player:
-  audioUrl?: string;
+const iconMap: Record<string, JSX.Element> = {
+  sparkles: <Sparkles className="h-5 w-5 text-emerald-300" />,
+  rocket: <Rocket className="h-5 w-5 text-emerald-300" />,
+  wand: <Wand2 className="h-5 w-5 text-emerald-300" />,
+  bug: <Bug className="h-5 w-5 text-emerald-300" />,
+  video: <Video className="h-5 w-5 text-emerald-300" />,
+  megaphone: <Megaphone className="h-5 w-5 text-emerald-300" />,
 };
 
-const DEMO_MUSIC: NewRelease[] = [
+/** ---------------- Demo (hardcoded) data ---------------- **/
+const DEMO_UPDATES: NewRelease[] = [
   {
-    id: "1",
-    type: "single",
-    title: "Maiya Teri Jai Jaikaar Remix",
-    artists: "Arijit Singh, VDJ Fly, Dj Aadesh Sitamarhi",
-    coverUrl:
-      "/public/size_m.jpg",
-    releasedAgo: "2 weeks ago",
+    _id: "demo-1",
+    title: "AI Mood Mixes",
+    summary:
+      "Generate playlists from a vibe—try 'melancholic monsoon' or 'late-night focus'.",
+    tags: ["ai", "playlists"],
+    icon: "sparkles",
+    link: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?q=80&w=1200&auto=format&fit=crop",
+    imageAlt: "Headphones close-up",
+    pinned: true,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 7).toISOString(),
+    updatedAt: new Date().toISOString(),
+    author: "Tunify Team",
   },
   {
-    id: "2",
-    type: "single",
-    title: "Hunkara",
-    artists: "Pritam, Amitabh Bhattacharya, Dev Negi",
-    coverUrl:
-      "/public/Hunkara.jpg",
-    releasedAgo: "2 weeks ago",
+    _id: "demo-2",
+    title: "PartyRoom Sync Smoother",
+    summary: "Latency cut by ~30% with better auto-recovery if a peer drops.",
+    tags: ["party", "reliability"],
+    icon: "video",
+    link: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1512428559087-560fa5ceab42?q=80&w=1200&auto=format&fit=crop",
+    imageAlt: "Crowd at a show",
+    pinned: false,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 10).toISOString(),
+    updatedAt: new Date().toISOString(),
+    author: "Tunify Team",
+  },
+  {
+    _id: "demo-3",
+    title: "Lyrics View 2.0",
+    summary: "Smarter karaoke sync and cleaner typography for long verses.",
+    tags: ["lyrics", "ux"],
+    icon: "megaphone",
+    link: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1511379938547-c1f69419868d?auto=format&fit=crop&w=1200&q=80",
+    imageAlt: "Stage microphone",
+    pinned: false,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 15).toISOString(),
+    updatedAt: new Date().toISOString(),
+    author: "Tunify Team",
+  },
+  {
+    _id: "demo-4",
+    title: "Sleek Full-screen Player",
+    summary: "New color engine picks accurate hues from cover art.",
+    tags: ["player", "design"],
+    icon: "wand",
+    link: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1492684223066-81342ee5ff30?auto=format&fit=crop&w=1200&q=80",
+    imageAlt: "Vibrant gradient lights",
+    pinned: true,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 20).toISOString(),
+    updatedAt: new Date().toISOString(),
+    author: "Tunify Team",
+  },
+  {
+    _id: "demo-5",
+    title: "Performance Pass",
+    summary: "Home loads ~45% faster; cache & image optimizations.",
+    tags: ["performance", "infra"],
+    icon: "rocket",
+    link: "",
+    imageUrl:
+      "https://images.unsplash.com/photo-1518779578993-ec3579fee39f?q=80&w=1200&auto=format&fit=crop",
+    imageAlt: "Speed motion lights",
+    pinned: false,
+    publishedAt: new Date(Date.now() - 1000 * 60 * 60 * 24 * 25).toISOString(),
+    updatedAt: new Date().toISOString(),
+    author: "Tunify Team",
   },
 ];
 
-const DEMO_PODCASTS: NewRelease[] = [
-  {
-    id: "p1",
-    type: "podcast",
-    title: "Daily Tech Roundup — 15 min",
-    artists: "TechWave",
-    coverUrl:
-      "https://images.unsplash.com/photo-1511671782779-c97d3d27a1d4?w=600&q=80&auto=format&fit=crop",
-    releasedAgo: "3 days ago",
-  },
-  {
-    id: "p2",
-    type: "podcast",
-    title: "Design Stories — Color & Emotion",
-    artists: "StudioTalk",
-    coverUrl:
-      "https://images.unsplash.com/photo-1515378791036-0648a3ef77b2?w=600&q=80&auto=format&fit=crop",
-    releasedAgo: "1 week ago",
-  },
-];
+/** -------------- Types for API response -------------- **/
+type ListResp = {
+  ok: boolean;
+  pinned: NewRelease[];
+  items: NewRelease[];
+  nextCursor: string | null;
+};
 
-export default function WhatsNew() {
-  // const { initializeQueue, playNow } = usePlayerStore(); // if you want play wiring
-  const [tab, setTab] = useState<"music" | "podcasts">("music");
-
-  const releases = useMemo<NewRelease[]>(() => {
-    return tab === "music" ? DEMO_MUSIC : DEMO_PODCASTS;
-  }, [tab]);
-
-  const onPlay = (item: NewRelease) => {
-    // TODO: map your release to a Song object and wire it to the player store
-    // Example:
-    // const song = { title: item.title, artist: item.artists, imageUrl: item.coverUrl, audioUrl: item.audioUrl ?? "" };
-    // initializeQueue([song]);
-    // playNow(song);
-    // For now, just no-op:
-    console.log("Play:", item.title);
-  };
+/** -------------- UI Card -------------- **/
+const Card = ({ u }: { u: NewRelease }) => {
+  const bust = u.updatedAt || u.publishedAt;
+  const img = u.imageUrl
+    ? `${u.imageUrl}${u.imageUrl.includes("?") ? "&" : "?"}v=${encodeURIComponent(bust)}`
+    : "";
 
   return (
-    <main className="min-h-[calc(100vh-120px)]">
-      <div className="mx-auto w-full max-w-6xl px-4 py-8">
-        {/* Header */}
-        <div className="mb-6">
-          <h1 className="text-3xl sm:text-4xl font-extrabold tracking-tight">
-            What’s New
-          </h1>
-          <p className="mt-2 text-sm sm:text-base text-zinc-400">
-            The latest releases from artists, podcasts, and shows you follow.
-          </p>
-        </div>
+    <div className="rounded-2xl p-4 bg-white/[0.03] border border-white/10 hover:bg-white/[0.06] hover:border-white/20 transition">
+      <div className="flex items-start gap-3">
+        {/* Thumb / Icon */}
+        {u.imageUrl ? (
+          <img
+            src={img}
+            alt={u.imageAlt || u.title}
+            className="h-16 w-16 object-cover rounded-lg ring-1 ring-white/10"
+            loading="lazy"
+            decoding="async"
+          />
+        ) : (
+          <div className="inline-flex items-center justify-center h-16 w-16 rounded-lg bg-white/10 ring-1 ring-white/10">
+            {iconMap[u.icon] ?? iconMap.sparkles}
+          </div>
+        )}
 
-        {/* Tabs */}
-        <div className="flex items-center gap-2 mb-8">
-          <button
-            className={cn(
-              "px-4 py-2 rounded-full text-sm ring-1 transition",
-              tab === "music"
-                ? "bg-white text-black ring-transparent"
-                : "bg-zinc-800 text-zinc-200 ring-zinc-700 hover:bg-zinc-700"
+        <div className="min-w-0 flex-1">
+          {/* top row */}
+          <div className="flex items-center gap-2 flex-wrap">
+            {u.pinned && (
+              <span className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-emerald-500/15 text-emerald-300 ring-1 ring-emerald-400/20">
+                pinned
+              </span>
             )}
-            onClick={() => setTab("music")}
-          >
-            Music
-          </button>
-          <button
-            className={cn(
-              "px-4 py-2 rounded-full text-sm ring-1 transition",
-              tab === "podcasts"
-                ? "bg-white text-black ring-transparent"
-                : "bg-zinc-800 text-zinc-200 ring-zinc-700 hover:bg-zinc-700"
-            )}
-            onClick={() => setTab("podcasts")}
-          >
-            Podcast &amp; Shows
-          </button>
-        </div>
+            {u.tags?.map((t) => (
+              <span
+                key={t}
+                className="text-[10px] uppercase tracking-wider px-2 py-0.5 rounded bg-white/5 text-white/70 ring-1 ring-white/10"
+              >
+                {t}
+              </span>
+            ))}
+            <span className="ml-auto text-xs text-white/50">
+              {new Date(u.publishedAt).toLocaleDateString()}
+            </span>
+          </div>
 
-        {/* Section heading */}
-        <h2 className="text-xl sm:text-2xl font-bold mb-4">Earlier</h2>
+          <h3 className="mt-1.5 text-sm sm:text-base font-semibold text-white">{u.title}</h3>
+          <p className="mt-1 text-sm text-white/80">{u.summary}</p>
 
-        {/* List */}
-        <div className="space-y-6">
-          {releases.map((item) => (
-            <article
-              key={item.id}
-              className="relative rounded-xl bg-zinc-900/50 ring-1 ring-zinc-800 overflow-hidden"
+          {u.link ? (
+            <a
+              href={u.link}
+              target="_blank"
+              rel="noreferrer"
+              className="mt-2 inline-flex text-xs text-emerald-300 hover:underline"
             >
-              {/* thin divider at top (subtle) */}
-              <div className="h-px bg-zinc-800/80" />
-
-              <div className="flex items-center gap-5 px-4 sm:px-6 py-4">
-                {/* Cover */}
-                <div className="relative shrink-0">
-                  <img
-                    src={item.coverUrl}
-                    alt={item.title}
-                    className="h-24 w-24 rounded-lg object-cover shadow"
-                    draggable={false}
-                  />
-                </div>
-
-                {/* Meta */}
-                <div className="min-w-0 flex-1">
-                  <h3 className="text-base sm:text-lg font-semibold truncate">
-                    {item.title}
-                  </h3>
-                  <p className="mt-1 text-sm text-zinc-400 truncate">
-                    {item.artists}
-                  </p>
-                  <p className="mt-2 text-xs text-zinc-500">
-                    {item.type === "album"
-                      ? "Album"
-                      : item.type === "single"
-                      ? "Single"
-                      : "Podcast"}{" "}
-                    • {item.releasedAgo}
-                  </p>
-                </div>
-
-                {/* Add button (subtle) */}
-                <button
-                  title="Add to library"
-                  className="mr-2 hidden sm:inline-flex h-9 w-9 items-center justify-center rounded-full bg-zinc-800 hover:bg-zinc-700 ring-1 ring-zinc-700"
-                >
-                  <Plus className="h-4 w-4" />
-                </button>
-
-                {/* Play button */}
-                <button
-                  onClick={() => onPlay(item)}
-                  title="Play"
-                  className="inline-flex h-11 w-11 items-center justify-center rounded-full bg-white text-black hover:scale-[1.03] transition shadow"
-                >
-                  <Play className="h-5 w-5 translate-x-[1px]" />
-                </button>
-              </div>
-            </article>
-          ))}
+              Learn more →
+            </a>
+          ) : null}
         </div>
       </div>
+    </div>
+  );
+};
+
+/** -------------- Page -------------- **/
+export default function WhatsNew() {
+  const [pinned, setPinned] = useState<NewRelease[]>([]);
+  const [items, setItems] = useState<NewRelease[]>([]);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
+  const [loading, setLoading] = useState(false);
+  const bootedRef = useRef(false);
+
+  // Try API → fallback to hardcoded DEMO_UPDATES
+  async function loadInitial() {
+    setLoading(true);
+    try {
+      const { data } = await axiosInstance.get<ListResp>("/whats-new?limit=20");
+      if (data?.ok && (data.items?.length || data.pinned?.length)) {
+        setPinned(data.pinned || []);
+        setItems(data.items || []);
+        setNextCursor(data.nextCursor || null);
+      } else {
+        setPinned(DEMO_UPDATES.filter((u) => u.pinned));
+        setItems(DEMO_UPDATES.filter((u) => !u.pinned));
+        setNextCursor(null);
+      }
+    } catch {
+      setPinned(DEMO_UPDATES.filter((u) => u.pinned));
+      setItems(DEMO_UPDATES.filter((u) => !u.pinned));
+      setNextCursor(null);
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  async function loadMore() {
+    if (!nextCursor) return;
+    setLoading(true);
+    try {
+      const { data } = await axiosInstance.get<ListResp>(
+        `/whats-new?limit=20&cursor=${encodeURIComponent(nextCursor)}`
+      );
+      if (data?.ok) {
+        setItems((prev) => [...prev, ...(data.items || [])]);
+        setNextCursor(data.nextCursor || null);
+      }
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (bootedRef.current) return;
+    bootedRef.current = true;
+
+    loadInitial();
+
+    // Optional SSE live updates (won’t affect demo fallback if backend is absent)
+    try {
+      const url = new URL("/api/whats-new/stream", window.location.origin);
+      const es = new EventSource(url.toString(), { withCredentials: true });
+
+      es.addEventListener("update", (ev: MessageEvent) => {
+        try {
+          const payload = JSON.parse(ev.data);
+          const u: NewRelease | undefined = payload?.data;
+          if (!u?._id) return;
+
+          if (payload.type === "created") {
+            setItems((prev) => [u, ...prev]);
+          } else if (payload.type === "updated") {
+            setItems((prev) => prev.map((x) => (x._id === u._id ? u : x)));
+            setPinned((prev) => prev.map((x) => (x._id === u._id ? u : x)));
+          }
+        } catch {}
+      });
+
+      return () => es.close();
+    } catch {
+      // no-op
+    }
+  }, []);
+
+  return (
+    <main className="mx-auto w-full max-w-5xl px-4 py-8">
+      {/* Header with Tunify logo on the left */}
+      <header className="mb-6 flex items-center gap-4">
+        <Link
+          to="/"
+          className="group inline-flex items-center gap-2 rounded-lg focus:outline-none focus-visible:ring-2 focus-visible:ring-emerald-500/70"
+          aria-label="Back to Home"
+        >
+          <img
+            src="/Tunify.png"
+            alt="Tunify"
+            className="h-9 w-9 rounded-md ring-1 ring-white/10 shadow-[0_6px_18px_rgba(0,0,0,.35)]"
+            draggable={false}
+          />
+          <span className="sr-only">Tunify Home</span>
+        </Link>
+
+        <div>
+          <h1 className="text-2xl sm:text-3xl font-extrabold tracking-tight">What’s New</h1>
+          <p className="text-white/70 mt-1">
+            Live product updates, releases, and improvements.
+          </p>
+        </div>
+      </header>
+
+      {/* Pinned */}
+      {pinned.length > 0 && (
+        <section className="mb-6">
+          <h2 className="text-xs uppercase tracking-wider text-white/60 mb-3">Pinned</h2>
+          <div className="grid gap-3 sm:grid-cols-2">
+            {pinned.map((u) => (
+              <Card key={u._id} u={u} />
+            ))}
+          </div>
+        </section>
+      )}
+
+      {/* Latest */}
+      <section>
+        <h2 className="text-xs uppercase tracking-wider text-white/60 mb-3">Latest</h2>
+        <div className="space-y-3">
+          {items.map((u) => (
+            <Card key={u._id} u={u} />
+          ))}
+        </div>
+
+        <div className="mt-5 flex justify-center">
+          {nextCursor ? (
+            <button
+              onClick={loadMore}
+              disabled={loading}
+              className="px-4 h-9 rounded-lg bg-white/5 hover:bg-white/10 border border-white/10 text-sm"
+            >
+              {loading ? "Loading…" : "Load more"}
+            </button>
+          ) : (
+            <div className="text-xs text-white/50">You’re all caught up 🎉</div>
+          )}
+        </div>
+      </section>
     </main>
   );
 }
