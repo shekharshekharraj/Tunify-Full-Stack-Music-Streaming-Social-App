@@ -36,6 +36,40 @@ const easeInOut = (x: number) => (x < 0.5 ? 2 * x * x : 1 - Math.pow(-2 * x + 2,
 // Default light red baseline (rose-ish)
 const DEFAULT_RGB = "244,63,94";
 
+/* ---------- Pretty section title ---------- */
+function SectionTitle({
+  title,
+  subtitle,
+  as = "h2",
+}: {
+  title: string;
+  subtitle?: string;
+  as?: "h1" | "h2";
+}) {
+  const Tag = as as any;
+  return (
+    <div className="mb-6">
+      <div className="group inline-flex items-baseline gap-3">
+        <Tag
+          className="
+            font-extrabold tracking-tight
+            bg-clip-text text-transparent
+            bg-gradient-to-r from-white via-white to-white/80
+            text-3xl sm:text-4xl
+          "
+        >
+          {title}
+        </Tag>
+        <span className="relative h-[2px] w-16 overflow-hidden rounded bg-white/15">
+          <span className="absolute inset-0 -translate-x-full bg-gradient-to-r from-transparent via-white to-transparent transition-transform duration-700 ease-out group-hover:translate-x-0" />
+        </span>
+      </div>
+      {subtitle && <p className="text-zinc-400 text-sm mt-2">{subtitle}</p>}
+    </div>
+  );
+}
+/* ------------------------------------------ */
+
 const HomePage = () => {
   const [searchQuery, setSearchQuery] = useState("");
   const [tick, setTick] = useState(0); // drives periodic reshuffle
@@ -52,8 +86,7 @@ const HomePage = () => {
     featuredSongs,
   } = useMusicStore();
 
-  // ⬇️ removed isPlaying from here
-  const { initializeQueue, dominantColor} = usePlayerStore();
+  const { initializeQueue, dominantColor } = usePlayerStore();
   const { isSignedIn } = useUser();
 
   // color coming from card hover (rgb string "r,g,b" or null to clear)
@@ -202,7 +235,7 @@ const HomePage = () => {
                   <SignedIn>
                     {searchQuery && (
                       <>
-                        <h1 className="text-2xl sm:text-3xl font-bold mb-6">Search Results</h1>
+                        <SectionTitle as="h1" title="Search Results" subtitle="Here’s what we found" />
                         <SearchResults songs={filteredSongs} />
                       </>
                     )}
@@ -210,22 +243,27 @@ const HomePage = () => {
 
                   {!searchQuery && (
                     <>
-                      <h1 className="text-2xl sm:text-3xl font-bold mb-6">{getGreeting()}</h1>
+                      <SectionTitle
+                        as="h1"
+                        title={getGreeting()}
+                        subtitle="Your daily mix of vibes, picks, and trends"
+                      />
 
                       {/* Featured under greeting → reshuffled + square cards + hover color hook */}
                       <FeaturedSection songs={dynamicFeatured} onHoverColor={handleHoverColor} />
 
                       <div className="space-y-8 mt-6">
-                        <SectionGrid
+                        <SectionTitle
                           title="Made For You"
-                          songs={dynamicMadeForYou}
-                          isLoading={isLoading}
+                          subtitle="Curated based on your recent listens"
                         />
-                        <SectionGrid
+                        <SectionGrid title="" songs={dynamicMadeForYou} isLoading={isLoading} />
+
+                        <SectionTitle
                           title="Trending"
-                          songs={dynamicTrending}
-                          isLoading={isLoading}
+                          subtitle="What everyone’s spinning right now"
                         />
+                        <SectionGrid title="" songs={dynamicTrending} isLoading={isLoading} />
                       </div>
                     </>
                   )}
