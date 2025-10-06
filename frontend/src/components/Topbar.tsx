@@ -1,7 +1,7 @@
 // frontend/src/components/Topbar.tsx
 import React, { useEffect, useState } from "react";
 import { SignedOut, UserButton, useUser, useAuth } from "@clerk/clerk-react";
-import { LayoutDashboardIcon, Video, Bell, Rocket, Wand2 } from "lucide-react";
+import { LayoutDashboardIcon, Video, Bell, Rocket, Wand2, Youtube } from "lucide-react"; // ⬅️ NEW: Youtube
 import { Link, useLocation, useNavigate } from "react-router-dom";
 import SignInOAuthButtons from "./SignInOAuthButtons";
 import { cn } from "@/lib/utils";
@@ -116,7 +116,7 @@ const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
 
               {/* Right: Actions (tight spacing) */}
               <div className="flex items-center gap-1.5 sm:gap-2">
-                {/* What's New icon (kept as link) */}
+                {/* What's New */}
                 <Link
                   to="/whats-new"
                   aria-label="What’s new"
@@ -130,6 +130,21 @@ const Topbar: React.FC<TopbarProps> = ({ searchQuery, setSearchQuery }) => {
                   <Bell className="size-3.5 text-white/90" />
                   <span className="absolute -top-0.5 -right-0.5 h-2 w-2 rounded-full bg-emerald-400 ring-2 ring-black" />
                 </Link>
+
+                {/* ⬅️ NEW: Quick YouTube entry */}
+                <Link
+                  to="/yt"
+                  aria-label="YouTube"
+                  className={cn(
+                    "inline-flex h-8 w-8 items-center justify-center rounded-lg",
+                    "ring-1 ring-white/10 bg-white/5 hover:bg-white/10",
+                    "transition"
+                  )}
+                  title="YouTube"
+                >
+                  <Youtube className="size-3.5 text-white/90" />
+                </Link>
+                {/* ⬆️ NEW */}
 
                 {/* Start Party */}
                 <button

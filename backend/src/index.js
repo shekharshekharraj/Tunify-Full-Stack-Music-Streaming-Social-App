@@ -26,6 +26,7 @@ import activityRoutes from "./routes/activity.route.js";
 import aiChatRoutes from "./routes/ai.chat.route.js";
 import songSearchRoutes from "./routes/song.search.route.js";
 import partyRoutes from "./routes/party.route.js";
+import ytMusicRoute from "./routes/ytmusic.route.js";
 
 dotenv.config();
 
@@ -74,6 +75,8 @@ const corsConfig = {
 
 app.use(cors(corsConfig));
 app.options("*", cors(corsConfig));
+
+app.use("/api/yt", ytMusicRoute);
 
 // ----- Security / misc -----
 app.disable("x-powered-by");

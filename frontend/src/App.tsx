@@ -1,3 +1,4 @@
+// src/App.tsx
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
 import { Suspense, lazy } from "react";
@@ -19,6 +20,9 @@ const AuthCallbackPage = lazy(() => import("./pages/auth-callback/AuthCallbackPa
 const AiChatPage = lazy(() => import("./pages/ai/AiChatPage.tsx"));
 const PartyRoom = lazy(() => import("./pages/party/PartyRoom"));
 const WhatsNew = lazy(() => import("./pages/WhatsNew"));
+
+// ✨ NEW: lazy-load the YouTube search panel page
+const YouTubeSearchPanel = lazy(() => import("@/pages/yt/YouTubeSearchPanel"));
 
 function App() {
   const location = useLocation();
@@ -58,6 +62,9 @@ function App() {
 
             {/* What's New */}
             <Route path="/whats-new" element={<WhatsNew />} />
+
+            {/* ✨ NEW: public route to the YouTube Search page */}
+            <Route path="/yt" element={<YouTubeSearchPanel />} />
 
             {/* 404 fallback inside layout */}
             <Route path="*" element={<NotFoundPage />} />

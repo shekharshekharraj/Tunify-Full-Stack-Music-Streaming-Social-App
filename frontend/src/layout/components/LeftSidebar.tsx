@@ -2,7 +2,14 @@
 import { useEffect, useMemo } from "react";
 import { Link, useLocation } from "react-router-dom";
 import { SignedIn, SignedOut, useUser } from "@clerk/clerk-react";
-import { Home, Sparkles, MessageSquareText, Library, Heart } from "lucide-react";
+import {
+  Home,
+  Sparkles,
+  MessageSquareText,
+  Library,
+  Heart,
+  Youtube,            // ⬅️ NEW: icon for the YouTube page
+} from "lucide-react";
 import { useMusicStore } from "@/stores/useMusicStore";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { Button } from "@/components/ui/button";
@@ -44,7 +51,7 @@ const LeftSidebar = () => {
         "shadow-[inset_0_1px_0_rgba(255,255,255,0.06),0_10px_30px_-10px_rgba(0,0,0,0.6)]"
       )}
     >
-      {/* Header (icon removed) */}
+      {/* Header */}
       <div className="px-4 py-4 border-b border-white/10">
         <div className="flex items-center justify-between">
           <div className="flex flex-col leading-tight">
@@ -101,6 +108,23 @@ const LeftSidebar = () => {
               <MessageSquareText className="size-4" />
               Chat
             </Link>
+
+            {/* ⬇️ NEW: YouTube page entry */}
+            <Link
+              to="/yt"
+              className={cn(
+                "flex items-center gap-3 px-3 py-2.5 rounded-lg text-sm font-semibold transition-colors",
+                "hover:bg-white/8 hover:text-white",
+                pathname === "/yt"
+                  ? "bg-white/12 text-white ring-1 ring-white/10"
+                  : "text-zinc-300"
+              )}
+              title="Explore YouTube Music"
+            >
+              <Youtube className="size-4" />
+              YouTube
+            </Link>
+            {/* ⬆️ NEW */}
           </div>
 
           {/* Divider */}
