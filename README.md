@@ -20,6 +20,9 @@
 
 ---
 
+<img width="1918" height="906" alt="image" src="https://github.com/user-attachments/assets/72d6abc7-4192-4e00-aac0-f107fdfc9f0a" />
+<img width="1918" height="910" alt="image" src="https://github.com/user-attachments/assets/cc08e2b7-7810-4e7c-a066-09df26868bcd" />
+
 ## 🧩 **Feature Details**
 
 ### 🎶 Player & Lyrics
