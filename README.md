@@ -13,16 +13,7 @@
 * 🎤 **Lyrics Sync (LRC)** — Auto-scrolling lyrics, active line highlight, mobile-friendly, quick ±sync nudges.
 * 👥 **Party Room** — Real-time synced playback with Socket.IO + WebRTC (<100 ms latency), presence, emoji bursts, and chat.
 * 🤖 **AI Chatbot (Gemini API)** — Conversational assistant for playlist curation, vibe mixes, and discovery prompts.
-* ▶️ **YouTube Mini Player (Dock)** — Slide-in **right-side mini player** on Home:
-
-  * Embedded **youtube-nocookie** iFrame, plays selected/related songs.
-  * Search box, **compact suggestions** (chips), scrollable results list.
-  * One-click from the player bar (TV/device icon) opens/closes the dock.
-  * Seeded by the currently playing track’s *title + artist*.
-* 🔎 **YouTube Music Explorer Page** — Beautiful, animated search UI:
-
-  * Tabs for **Songs / Videos / Albums / Artists / Playlists**.
-  * Smart suggestions, modal YouTube player, gradient/polish.
+* ▶️ **YouTube Mini Player (Dock)** — Slide-in **right-side mini player** 
 * 📰 **What’s New** — Live product updates with SSE; **demo fallback** (hardcoded updates) when backend isn’t available.
 * 💬 **Social Layer** — Friends’ “Listening to…” feed, 1:1 chat with delivery + unread counts.
 * 🛠️ **Admin Console** — Role-protected CRUD for songs/albums, Cloudinary uploads, live LRC editor.
@@ -146,7 +137,6 @@
 
 <img width="1918" height="906" alt="Now Playing" src="https://github.com/user-attachments/assets/72d6abc7-4192-4e00-aac0-f107fdfc9f0a" />
 <img width="1918" height="910" alt="Home & Feed" src="https://github.com/user-attachments/assets/cc08e2b7-7810-4e7c-a066-09df26868bcd" />
-<img width="420" alt="YouTube Mini Player" src="(screenshot-of-right-dock).png" />
 
 ---
 
@@ -156,11 +146,3 @@
 🔗 [GitHub](https://github.com/shekharshekharraj) • [LinkedIn](https://www.linkedin.com/in/raj-shekhar~/)
 
 ---
-
-### Changelog (recent)
-
-* Added **YouTube Mini Player Dock** (Home-only), scrollable + compact suggestions.
-* Introduced **YouTube Music Explorer** page with tabs, modal player, and polish.
-* “What’s New” now **auto-falls back** to demo data if API is unavailable.
-* Added Tunify logo placements (Topbar, “What’s New”, YT Explorer hero).
-* Player bar TV icon toggles the dock; Render deployment notes for embeds/autoplay/CSP.
