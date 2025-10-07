@@ -38,6 +38,11 @@ interface PlayerStore {
   repeatMode: RepeatMode;
   dominantColor: string;
 
+  // UPDATED: UI flag for the right YouTube dock
+  showYouTubeDock: boolean;                // UPDATED
+  setShowYouTubeDock: (open: boolean) => void; // UPDATED
+  toggleYouTubeDock: () => void;           // UPDATED
+
   audioNodes: AudioNodes;
   setAudioNodes: (nodes: AudioNodes) => void;
 
@@ -74,6 +79,11 @@ export const usePlayerStore = create<PlayerStore>()(
       repeatMode: "off",
       dominantColor: "20,20,20",
 
+      // UPDATED: default dock state
+      showYouTubeDock: false,                           // UPDATED
+      setShowYouTubeDock: (open) => set({ showYouTubeDock: open }), // UPDATED
+      toggleYouTubeDock: () => set((s) => ({ showYouTubeDock: !s.showYouTubeDock })), // UPDATED
+
       audioNodes: {},
       setAudioNodes: (nodes: AudioNodes) =>
         set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
@@ -84,18 +94,15 @@ export const usePlayerStore = create<PlayerStore>()(
         const merged = {
           ...prev,
           id: meta.id ?? prev.id,
-          _id: prev._id ?? meta.id ?? prev._id, // keep your Mongo id untouched
+          _id: prev._id ?? meta.id ?? prev._id,
           title: meta.title ?? prev.title,
           name: meta.title ?? prev.name,
           artist: meta.artist ?? prev.artist,
           artists: prev.artists ?? (meta.artist ? [meta.artist] : prev.artists),
-
-          // ✅ keep store consistent while following
-          imageUrl: meta.coverUrl ?? prev.imageUrl, // mirror Party cover into your model field
+          imageUrl: meta.coverUrl ?? prev.imageUrl,
           coverUrl: meta.coverUrl ?? prev.coverUrl,
           image: meta.coverUrl ?? prev.image,
           artworkUrl: meta.coverUrl ?? prev.artworkUrl,
-
           durationMs: meta.durationMs ?? prev.durationMs,
           duration: meta.durationMs ?? prev.duration,
           audioUrl: meta.audioUrl ?? prev.audioUrl,

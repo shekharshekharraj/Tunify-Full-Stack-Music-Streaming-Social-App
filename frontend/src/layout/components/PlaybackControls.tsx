@@ -16,6 +16,7 @@ import {
   Maximize2,
 } from "lucide-react";
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { useLocation } from "react-router-dom"; // UPDATED
 
 const formatTime = (seconds: number) => {
   const minutes = Math.floor(seconds / 60);
@@ -25,11 +26,6 @@ const formatTime = (seconds: number) => {
 
 /**
  * PlaybackControls — premium, responsive player bar
- * - Glass, gradient, and subtle shadows for depth
- * - Larger, tactile transport controls with smooth hover/active states
- * - Keyboard shortcuts (Space, ←/→ seek, ↑/↓ volume)
- * - Mobile-friendly: compact slider; desktop: full timeline + volume
- * - A11y labels everywhere; safe fallbacks if audio element missing
  */
 export const PlaybackControls: React.FC = () => {
   const {
@@ -46,7 +42,14 @@ export const PlaybackControls: React.FC = () => {
     repeatMode,
     toggleRepeatMode,
     audioNodes,
+
+    // UPDATED: YouTube dock state + action from the store
+    showYouTubeDock,
+    toggleYouTubeDock,
   } = usePlayerStore();
+
+  const { pathname } = useLocation(); // UPDATED
+  const onHome = pathname === "/";    // UPDATED
 
   const [volume, setVolume] = useState(75);
   const [currentTimeLocal, setCurrentTimeLocal] = useState(0);
@@ -124,14 +127,13 @@ export const PlaybackControls: React.FC = () => {
     if (audio) audio.volume = newVolume / 100;
   };
 
-  // ---- NEW: don't hijack keys while typing in inputs/textareas/contentEditable
+  // don't hijack keys while typing
   const isTypingInEditable = (e: KeyboardEvent) => {
     const el = e.target as HTMLElement | null;
     if (!el) return false;
     if (el.isContentEditable) return true;
     const tag = el.tagName;
     if (tag === "INPUT" || tag === "TEXTAREA" || tag === "SELECT") return true;
-    // also bail if focus is not on the body
     if (document.activeElement && document.activeElement !== document.body) return true;
     return false;
   };
@@ -139,12 +141,11 @@ export const PlaybackControls: React.FC = () => {
   // Keyboard shortcuts
   useEffect(() => {
     const onKey = async (e: KeyboardEvent) => {
-      // <-- guard: let typing work anywhere in the app
       if (isTypingInEditable(e)) return;
 
       if (!currentSong) return;
       switch (e.key) {
-        case " ": // Space: play/pause
+        case " ":
           e.preventDefault();
           await ensureAudioReady();
           togglePlay();
@@ -183,8 +184,6 @@ export const PlaybackControls: React.FC = () => {
   }, [currentSong, duration, togglePlay, volume]);
 
   const repeatActive = repeatMode !== "off";
-
-  // Subtle gradient for timeline track
   const timelineMax = useMemo(() => (duration && Number.isFinite(duration) ? duration : 100), [duration]);
 
   return (
@@ -321,7 +320,6 @@ export const PlaybackControls: React.FC = () => {
                   handleSeek(value);
                 }}
               />
-              {/* Glow underline on hover */}
               <div className="pointer-events-none absolute inset-x-0 -bottom-1 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
             <div className="text-[11px] tabular-nums text-zinc-400 min-w-[32px]">
@@ -365,11 +363,20 @@ export const PlaybackControls: React.FC = () => {
             <ListMusic className="h-4 w-4" />
           </Button>
 
-          <Button aria-label="Connect device" size="icon" variant="ghost" className="hover:text-white text-zinc-400 hover:bg-white/5">
+          {/* UPDATED: this replaces the old “Connect device” behavior */}
+          <Button
+            aria-label={showYouTubeDock ? "Hide YouTube panel" : "Show YouTube panel"} // UPDATED
+            size="icon"
+            variant="ghost"
+            className={`hover:text-white hover:bg-white/5 ${showYouTubeDock ? "text-emerald-400" : "text-zinc-400"}`} // UPDATED
+            onClick={toggleYouTubeDock}   // UPDATED
+            disabled={!onHome}            // UPDATED (Home only)
+            title={onHome ? "YouTube mini player" : "Open Home to use the YouTube panel"} // UPDATED
+          >
             <Laptop2 className="h-4 w-4" />
           </Button>
 
-          {/* Volume: expands on hover */}
+          {/* Volume */}
           <div className="flex items-center gap-2 group">
             <Button aria-label="Volume" size="icon" variant="ghost" className="hover:text-white text-zinc-400 hover:bg-white/5">
               <Volume1 className="h-4 w-4" />
