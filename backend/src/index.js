@@ -52,7 +52,7 @@ const allowedOriginsArr = [
   "http://127.0.0.1:3001",
   "http://127.0.0.1:3002",
   "http://localhost:5000",
-  "https://www.tunify.co.in",             // ← same-origin when serving frontend from backend
+  "https://www.tunify.co.in",
   FRONTEND_URL,
   RENDER_URL,
 ].filter(Boolean);
@@ -80,7 +80,50 @@ app.use("/api/yt", ytMusicRoute);
 
 // ----- Security / misc -----
 app.disable("x-powered-by");
-app.use(helmet({ contentSecurityPolicy: false, crossOriginResourcePolicy: { policy: "cross-origin" } }));
+
+// ✅ CHANGED: Strong CSP that still allows YouTube embeds; also disable COEP
+app.use(
+  helmet({
+    contentSecurityPolicy: {
+      useDefaults: true,
+      directives: {
+        "default-src": ["'self'"],
+        // YouTube iframe + possible Google domains used by YT
+        "frame-src": [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+          "https://*.youtube.com",
+          "https://*.google.com",
+        ],
+        // If you ever load the IFrame API or YT scripts
+        "script-src": [
+          "'self'",
+          "'unsafe-inline'",
+          "https://www.youtube.com",
+          "https://s.ytimg.com",
+          "https://*.google.com",
+          "https://*.gstatic.com",
+        ],
+        "style-src": ["'self'", "'unsafe-inline'"],
+        // thumbnails, cloudinary artwork
+        "img-src": [
+          "'self'",
+          "data:",
+          "blob:",
+          "https://i.ytimg.com",
+          "https://*.ytimg.com",
+          "https://res.cloudinary.com",
+        ],
+        "media-src": ["'self'", "blob:", "https://res.cloudinary.com"],
+        "connect-src": ["'self'", ...allowedOriginsArr, "https://www.youtube.com", "https://*.google.com"],
+      },
+    },
+    crossOriginEmbedderPolicy: false, // ✅ IMPORTANT for YouTube iframe compatibility
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, // ✅ allow YT popup flows
+  })
+);
+
 app.use(process.env.NODE_ENV === "development" ? morgan("dev") : morgan("tiny"));
 app.use(compression());
 app.use(express.json({ limit: "10mb" }));
@@ -148,7 +191,7 @@ if (frontendDistPath) {
 const httpServer = createServer(app);
 const io = initializeSocket(httpServer, allowedOriginsArr);
 app.set("io", io);
-initPartyNamespace(io); // must be AFTER io is created
+initPartyNamespace(io);
 
 // ----- Errors -----
 app.use((err, _req, res, _next) => {

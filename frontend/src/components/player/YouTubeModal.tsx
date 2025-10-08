@@ -1,6 +1,5 @@
-// src/components/player/YouTubeModal.tsx
 import React, { useEffect, useState } from "react";
-import YouTubeEmbed from "./YouTubeEmbed";
+import YouTubeEmbed from "./YouTubeEmbed"; // ✅ this uses buildYTUrl under the hood
 
 type Props = {
   open: boolean;

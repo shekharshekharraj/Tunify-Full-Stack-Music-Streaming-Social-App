@@ -4,18 +4,7 @@ import { usePlayerStore } from "@/stores/usePlayerStore";
 import { ytSearchApi, ytSuggestApi, YTResult } from "@/lib/ytmusic";
 import { X, Youtube, Sparkles, Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-
-const buildYTUrl = (id: string) => {
-  const base = "https://www.youtube-nocookie.com/embed/" + encodeURIComponent(id);
-  const qs = new URLSearchParams({
-    autoplay: "0",
-    rel: "0",
-    modestbranding: "1",
-    playsinline: "1",
-    origin: window.location.origin,
-  });
-  return `${base}?${qs.toString()}`;
-};
+import { buildYTUrl } from "@/lib/youtube"; // ✅ CHANGED: centralized URL
 
 export default function RightDockYouTube() {
   const { pathname } = useLocation();
@@ -151,7 +140,7 @@ function DockInner({
             </button>
           </div>
 
-          {/* ⭐ Suggestions (compact) */}
+          {/* Suggestions (compact) */}
           {suggests.length > 0 && (
             <div className="mt-2 relative">
               <span className="pointer-events-none absolute left-0 top-0 h-7 w-6 bg-gradient-to-r from-zinc-950/80 to-transparent rounded-l-md" />
