@@ -1,10 +1,11 @@
+// src/components/right-dock/RightDockYouTube.tsx
 import { useEffect, useState } from "react";
 import { useLocation } from "react-router-dom";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { ytSearchApi, ytSuggestApi, YTResult } from "@/lib/ytmusic";
 import { X, Youtube, Sparkles, Loader2, Play } from "lucide-react";
 import { cn } from "@/lib/utils";
-import { buildYTUrl } from "@/lib/youtube"; // ✅ CHANGED: centralized URL
+import YouTubeEmbed from "@/components/player/YouTubeEmbed";
 
 export default function RightDockYouTube() {
   const { pathname } = useLocation();
@@ -102,19 +103,18 @@ function DockInner({
           </button>
         </div>
 
-        {/* Player */}
-        <div className="aspect-video bg-black">
+        {/* Player (now uses the same embed component as the /yt page) */}
+        <div className="bg-black">
           {currentVid?.id ? (
-            <iframe
-              key={currentVid.id}
-              src={buildYTUrl(currentVid.id)}
-              title={currentVid.title || "YouTube"}
-              allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture; web-share"
-              allowFullScreen
-              className="h-full w-full"
-            />
+            <div className="p-0">
+              <YouTubeEmbed
+                videoId={currentVid.id}
+                title={currentVid.title || "YouTube"}
+                autoPlay={false}
+              />
+            </div>
           ) : (
-            <div className="grid h-full w-full place-items-center text-white/60 text-sm">
+            <div className="grid aspect-video w-full place-items-center text-white/60 text-sm">
               No video selected
             </div>
           )}
@@ -140,7 +140,7 @@ function DockInner({
             </button>
           </div>
 
-          {/* Suggestions (compact) */}
+          {/* Suggestions (compact, single-row scroll) */}
           {suggests.length > 0 && (
             <div className="mt-2 relative">
               <span className="pointer-events-none absolute left-0 top-0 h-7 w-6 bg-gradient-to-r from-zinc-950/80 to-transparent rounded-l-md" />
