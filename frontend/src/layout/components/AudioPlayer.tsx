@@ -1,3 +1,4 @@
+// src/components/player/AudioPlayer.tsx
 import { useEffect, useRef } from "react";
 import { usePlayerStore, resumeAudioContext } from "@/stores/usePlayerStore";
 
@@ -10,6 +11,7 @@ export default function AudioPlayer() {
     playNext,
     repeatMode,
     audioNodes,
+    activeSource, // ⬅️ read active source
   } = usePlayerStore();
 
   const audioRef = useRef<HTMLAudioElement | null>(null);
@@ -21,7 +23,7 @@ export default function AudioPlayer() {
     audioRef.current = el || null;
   }, [audioNodes]);
 
-  // When song changes, set src and play (Cloudinary URL)
+  // When song changes, set src and (if playing) start audio
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
@@ -38,15 +40,19 @@ export default function AudioPlayer() {
     (async () => {
       try {
         await resumeAudioContext(audioNodes?.audioContext);
-        if (isPlaying) await audio.play().catch(()=>{});
+        // Only auto-play if library is the active source
+        if (isPlaying && activeSource === "library") await audio.play().catch(()=>{});
       } catch {}
     })();
-  }, [currentSong?._id, (currentSong as any)?.audioUrl]);
+  }, [currentSong?._id, (currentSong as any)?.audioUrl, isPlaying, activeSource, audioNodes?.audioContext]);
 
-  // Respond to isPlaying toggles
+  // Respond to isPlaying toggles (guarded to library only)
   useEffect(() => {
     const audio = audioRef.current;
     if (!audio) return;
+
+    // ⬇️ Only control the <audio> element when LIBRARY is active
+    if (activeSource !== "library") return;
 
     (async () => {
       try {
@@ -55,7 +61,7 @@ export default function AudioPlayer() {
         else audio.pause();
       } catch {}
     })();
-  }, [isPlaying]);
+  }, [isPlaying, activeSource, audioNodes?.audioContext]);
 
   // Track time + ended
   useEffect(() => {

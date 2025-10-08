@@ -15,21 +15,44 @@ import {
   Volume1,
   Maximize2,
 } from "lucide-react";
-import React, { useEffect, useMemo, useRef, useState } from "react";
-import { useLocation } from "react-router-dom"; // UPDATED
+import React, {
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  useCallback,
+  useLayoutEffect,
+} from "react";
+import { useLocation } from "react-router-dom";
 
+/** Format seconds to m:ss */
 const formatTime = (seconds: number) => {
-  const minutes = Math.floor(seconds / 60);
-  const remainingSeconds = Math.floor(seconds % 60);
-  return `${minutes}:${remainingSeconds.toString().padStart(2, "0")}`;
+  const s = Math.max(0, Math.floor(seconds || 0));
+  const m = Math.floor(s / 60);
+  const r = s % 60;
+  return `${m}:${r.toString().padStart(2, "0")}`;
 };
 
 /**
- * PlaybackControls — premium, responsive player bar
+ * A more responsive, industry-grade global playback bar:
+ * - rAF ticker for time/duration sync
+ * - Buffered progress layer (for audio)
+ * - Throttled store writes (≈4hz)
+ * - On-drag seek with commit
+ * - rAF-batched volume changes
  */
 export const PlaybackControls: React.FC = () => {
   const {
+    // unified store values
+    activeSource,
+    currentYouTube,
+    ytControl,
+    seekTo,
+
+    // library values (still needed)
     currentSong,
+
+    // common controls
     isPlaying,
     togglePlay,
     playNext,
@@ -43,89 +66,160 @@ export const PlaybackControls: React.FC = () => {
     toggleRepeatMode,
     audioNodes,
 
-    // UPDATED: YouTube dock state + action from the store
+    // Dock
     showYouTubeDock,
+    setShowYouTubeDock,
     toggleYouTubeDock,
   } = usePlayerStore();
 
-  const { pathname } = useLocation(); // UPDATED
-  const onHome = pathname === "/";    // UPDATED
+  const { pathname } = useLocation();
+  const onHome = pathname === "/";
 
+  // pick the thing to display
+  const display =
+    activeSource === "youtube"
+      ? currentYouTube
+      : currentSong;
+
+  // refs for DOM/audio/raf
+  const audioElRef = useRef<HTMLAudioElement | null>(null);
+  const rafRef = useRef<number>(0);
+
+  // --- UI state (local, highly responsive) ---
   const [volume, setVolume] = useState(75);
   const [currentTimeLocal, setCurrentTimeLocal] = useState(0);
-  const [duration, setDuration] = useState(0);
-  const audioRef = useRef<HTMLAudioElement | null>(null);
+  const [durationLocal, setDurationLocal] = useState(0);
+  const [bufferedEnd, setBufferedEnd] = useState(0); // for audio
+  const [isSeeking, setIsSeeking] = useState(false);
+  const pendingSeekRef = useRef<number | null>(null);
 
-  // prefer audio from store if present
+  // prefer audio element from store if present
   const audioElement = audioNodes?.audioElement ?? null;
 
+  // Wire audio element reference
   useEffect(() => {
-    audioRef.current =
+    audioElRef.current =
       audioElement ?? (document.getElementById("global-audio") as HTMLAudioElement | null) ?? null;
   }, [audioElement]);
 
-  useEffect(() => {
-    const audio = audioRef.current;
+  // Ensure audio has correct crossOrigin and volume once
+  useLayoutEffect(() => {
+    const audio = audioElRef.current;
     if (!audio) return;
-
     try {
       audio.crossOrigin = "anonymous";
       audio.setAttribute("crossorigin", "anonymous");
     } catch {}
-
-    const updateTime = () => {
-      setCurrentTimeLocal(audio.currentTime);
-      setCurrentTime(audio.currentTime);
-    };
-
-    const updateDuration = () => setDuration(isFinite(audio.duration) ? audio.duration : 0);
-
-    audio.addEventListener("timeupdate", updateTime);
-    audio.addEventListener("loadedmetadata", updateDuration);
-
-    // initial sync
-    setCurrentTimeLocal(audio.currentTime || 0);
-    setCurrentTime(audio.currentTime || 0);
-    setDuration(isFinite(audio.duration) ? audio.duration : 0);
-
-    // initial volume
     audio.volume = volume / 100;
+  }, []);
 
-    return () => {
-      audio.removeEventListener("timeupdate", updateTime);
-      audio.removeEventListener("loadedmetadata", updateDuration);
+  // rAF ticker for smooth progress + duration + buffered updates
+  useEffect(() => {
+    let lastStorePush = 0; // throttle store setCurrentTime to ~4hz
+    const tick = () => {
+      const now = performance.now();
+
+      if (activeSource === "youtube" && ytControl) {
+        // --- YouTube path ---
+        const getCT = ytControl.getCurrentTime?.();
+        const getDur = ytControl.getDuration?.();
+        if (Number.isFinite(getCT as number)) {
+          const ct = (getCT as number) || 0;
+          if (!isSeeking) setCurrentTimeLocal(ct);
+          if (now - lastStorePush > 250) {
+            setCurrentTime(ct);
+            lastStorePush = now;
+          }
+        }
+        if (Number.isFinite(getDur as number) && (getDur as number) > 0) {
+          setDurationLocal(getDur as number);
+        }
+        // no buffered layer for YT
+        setBufferedEnd(0);
+      } else {
+        // --- Library (audio) path ---
+        const audio = audioElRef.current;
+        if (audio) {
+          const ct = audio.currentTime || 0;
+          if (!isSeeking) setCurrentTimeLocal(ct);
+          if (Number.isFinite(audio.duration) && audio.duration > 0) {
+            setDurationLocal(audio.duration);
+          }
+          // buffered layer
+          try {
+            const r = audio.buffered;
+            if (r && r.length) {
+              const end = r.end(r.length - 1);
+              setBufferedEnd(end);
+            }
+          } catch {
+            setBufferedEnd(0);
+          }
+
+          // Throttle store writes
+          if (now - lastStorePush > 250) {
+            setCurrentTime(ct);
+            lastStorePush = now;
+          }
+        }
+      }
+      rafRef.current = requestAnimationFrame(tick);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [audioRef.current, currentSong, setCurrentTime]);
 
+    rafRef.current = requestAnimationFrame(tick);
+    return () => cancelAnimationFrame(rafRef.current);
+  }, [activeSource, ytControl, isSeeking, setCurrentTime]);
+
+  // Volume: rAF-batch any bursty changes to both audio + YT
   useEffect(() => {
-    setCurrentTimeLocal(storeCurrentTime);
-  }, [storeCurrentTime]);
+    let f = 0;
+    const apply = () => {
+      const a = audioElRef.current;
+      if (a) a.volume = volume / 100;
+      ytControl?.setVolume?.(volume);
+    };
+    f = requestAnimationFrame(apply);
+    return () => cancelAnimationFrame(f);
+  }, [volume, ytControl]);
 
+  // Keep local time synced from store (in case other sources update it)
   useEffect(() => {
-    const audio = audioRef.current;
-    if (audio) audio.volume = volume / 100;
-  }, [volume]);
+    if (!isSeeking) setCurrentTimeLocal(storeCurrentTime || 0);
+  }, [storeCurrentTime, isSeeking]);
 
-  const ensureAudioReady = async () => {
+  const ensureAudioReady = useCallback(async () => {
     await resumeAudioContext(audioNodes?.audioContext);
-  };
+  }, [audioNodes?.audioContext]);
 
-  const handleSeek = (value: number[]) => {
-    const audio = audioRef.current;
-    if (!audio) return;
+  // SEEK handling (drag without spamming store; commit on release)
+  const onSeekChange = useCallback((value: number[]) => {
+    setIsSeeking(true);
     const t = value[0];
-    audio.currentTime = t;
-    setCurrentTime(t);
     setCurrentTimeLocal(t);
-  };
+    pendingSeekRef.current = t;
+  }, []);
 
-  const handleVolumeChange = (value: number[]) => {
-    const newVolume = value[0];
-    setVolume(newVolume);
-    const audio = audioRef.current;
-    if (audio) audio.volume = newVolume / 100;
-  };
+  const onSeekCommit = useCallback(async (value: number[]) => {
+    await ensureAudioReady();
+    const t = value[0];
+    pendingSeekRef.current = null;
+    setIsSeeking(false);
+
+    // unified seek
+    if (seekTo) seekTo(t);
+
+    // also set audio currentTime when library is active to avoid any drift
+    const audio = audioElRef.current;
+    if (activeSource !== "youtube" && audio) {
+      audio.currentTime = t;
+    }
+    setCurrentTimeLocal(t);
+  }, [ensureAudioReady, seekTo, activeSource]);
+
+  // Volume change (instant UI, rAF applies to sinks)
+  const onVolumeChange = useCallback((value: number[]) => {
+    setVolume(value[0]);
+  }, []);
 
   // don't hijack keys while typing
   const isTypingInEditable = (e: KeyboardEvent) => {
@@ -143,7 +237,7 @@ export const PlaybackControls: React.FC = () => {
     const onKey = async (e: KeyboardEvent) => {
       if (isTypingInEditable(e)) return;
 
-      if (!currentSong) return;
+      if (!display) return;
       switch (e.key) {
         case " ":
           e.preventDefault();
@@ -152,68 +246,87 @@ export const PlaybackControls: React.FC = () => {
           break;
         case "ArrowRight":
           e.preventDefault();
-          if (audioRef.current) {
-            const t = Math.min((audioRef.current.currentTime || 0) + 5, duration || Infinity);
-            audioRef.current.currentTime = t;
-            setCurrentTime(t);
-            setCurrentTimeLocal(t);
-          }
+          onSeekCommit([Math.min((currentTimeLocal || 0) + 5, (durationLocal || Infinity))]);
           break;
         case "ArrowLeft":
           e.preventDefault();
-          if (audioRef.current) {
-            const t = Math.max((audioRef.current.currentTime || 0) - 5, 0);
-            audioRef.current.currentTime = t;
-            setCurrentTime(t);
-            setCurrentTimeLocal(t);
-          }
+          onSeekCommit([Math.max((currentTimeLocal || 0) - 5, 0)]);
           break;
         case "ArrowUp":
           e.preventDefault();
-          handleVolumeChange([Math.min(volume + 5, 100)]);
+          onVolumeChange([Math.min(volume + 5, 100)]);
           break;
         case "ArrowDown":
           e.preventDefault();
-          handleVolumeChange([Math.max(volume - 5, 0)]);
+          onVolumeChange([Math.max(volume - 5, 0)]);
           break;
       }
     };
 
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
-  }, [currentSong, duration, togglePlay, volume]);
+  }, [display, durationLocal, togglePlay, volume, currentTimeLocal, onSeekCommit, onVolumeChange, ensureAudioReady]);
 
   const repeatActive = repeatMode !== "off";
-  const timelineMax = useMemo(() => (duration && Number.isFinite(duration) ? duration : 100), [duration]);
+  const timelineMax = useMemo(
+    () => (durationLocal && Number.isFinite(durationLocal) ? durationLocal : 100),
+    [durationLocal]
+  );
 
+  const toggleDock = () => {
+    if (typeof setShowYouTubeDock === "function") {
+      setShowYouTubeDock(!showYouTubeDock);
+    } else if (typeof (toggleYouTubeDock as any) === "function") {
+      (toggleYouTubeDock as any)();
+    }
+  };
+
+  // derived display fields
+  const displayTitle =
+    activeSource === "youtube" ? currentYouTube?.title : currentSong?.title;
+  const displayArtist =
+    activeSource === "youtube" ? currentYouTube?.artist : currentSong?.artist;
+  const displayImage =
+    activeSource === "youtube" ? currentYouTube?.imageUrl : currentSong?.imageUrl;
+
+  // buffered bar percent (audio only)
+  const bufferedPct =
+    activeSource === "youtube" || !timelineMax
+      ? 0
+      : Math.min(100, Math.max(0, (bufferedEnd / timelineMax) * 100));
   return (
     <footer
       className="h-20 sm:h-24 bg-gradient-to-t from-zinc-950/90 to-zinc-900/60 border-t border-white/5 backdrop-blur-xl px-3 sm:px-4 shadow-[0_-8px_24px_-12px_rgba(0,0,0,0.6)]"
       aria-label="Playback controls"
     >
       <div className="flex justify-between items-center h-full max-w-[1800px] mx-auto">
-        {/* Left: song info + fullscreen */}
+        {/* Left: now playing */}
         <div className="hidden sm:flex items-center gap-4 min-w-[220px] w-[32%]">
-          {currentSong ? (
+          {display ? (
             <>
               <img
-                src={currentSong.imageUrl}
-                alt={currentSong.title}
+                src={displayImage || "/placeholder.png"}
+                alt={displayTitle || "Now playing"}
                 className="w-14 h-14 object-cover rounded-xl ring-1 ring-white/10 shadow-md"
               />
               <div className="flex-1 min-w-0">
                 <div
                   className="font-semibold truncate hover:underline cursor-pointer text-white"
-                  title={currentSong.title}
+                  title={displayTitle}
                 >
-                  {currentSong.title}
+                  {displayTitle}
                 </div>
-                <div
-                  className="text-sm text-zinc-400 truncate hover:underline cursor-pointer"
-                  title={currentSong.artist}
-                >
-                  {currentSong.artist}
-                </div>
+                {displayArtist && (
+                  <div
+                    className="text-sm text-zinc-400 truncate hover:underline cursor-pointer"
+                    title={displayArtist || undefined}
+                  >
+                    {displayArtist}
+                  </div>
+                )}
+                {activeSource === "youtube" && !displayArtist && (
+                  <div className="text-sm text-zinc-400 truncate">YouTube</div>
+                )}
               </div>
               <Button
                 aria-label="Enter full screen player"
@@ -233,7 +346,7 @@ export const PlaybackControls: React.FC = () => {
           )}
         </div>
 
-        {/* Center: transport controls */}
+        {/* Center: transport */}
         <div className="flex flex-col items-center gap-2 flex-1 max-w-full sm:max-w-[44%]">
           <div className="flex items-center gap-3 sm:gap-5">
             <Button
@@ -241,7 +354,8 @@ export const PlaybackControls: React.FC = () => {
               size="icon"
               variant="ghost"
               className="hidden sm:inline-flex hover:text-white text-zinc-400 hover:bg-white/5"
-              disabled={!currentSong}
+              disabled={!display || activeSource === "youtube"}
+              title={activeSource === "youtube" ? "Shuffle only works for library" : "Shuffle"}
             >
               <Shuffle className="h-4 w-4" />
             </Button>
@@ -255,7 +369,8 @@ export const PlaybackControls: React.FC = () => {
                 await ensureAudioReady();
                 playPrevious();
               }}
-              disabled={!currentSong}
+              disabled={!display || activeSource === "youtube"}
+              title={activeSource === "youtube" ? "Previous works for library queue" : "Previous"}
             >
               <SkipBack className="h-5 w-5" />
             </Button>
@@ -268,7 +383,7 @@ export const PlaybackControls: React.FC = () => {
                 await ensureAudioReady();
                 togglePlay();
               }}
-              disabled={!currentSong}
+              disabled={!display}
             >
               {isPlaying ? <Pause className="h-6 w-6" /> : <Play className="h-6 w-6" />}
             </Button>
@@ -282,7 +397,8 @@ export const PlaybackControls: React.FC = () => {
                 await ensureAudioReady();
                 playNext();
               }}
-              disabled={!currentSong}
+              disabled={!display || activeSource === "youtube"}
+              title={activeSource === "youtube" ? "Next works for library queue" : "Next"}
             >
               <SkipForward className="h-5 w-5" />
             </Button>
@@ -298,7 +414,8 @@ export const PlaybackControls: React.FC = () => {
               className={`hidden sm:inline-flex hover:text-white hover:bg-white/5 ${
                 repeatActive ? "text-emerald-400" : "text-zinc-400"
               }`}
-              disabled={!currentSong}
+              disabled={!display || activeSource === "youtube"}
+              title={activeSource === "youtube" ? "Repeat works for library queue" : undefined}
             >
               {repeatMode === "one" ? <Repeat1 className="h-4 w-4" /> : <Repeat className="h-4 w-4" />}
             </Button>
@@ -309,36 +426,58 @@ export const PlaybackControls: React.FC = () => {
             <div className="text-[11px] tabular-nums text-zinc-400 min-w-[32px] text-right">
               {formatTime(currentTimeLocal)}
             </div>
-            <div className="relative flex-1">
+
+            <div className="relative flex-1 group">
+              {/* Buffered layer (audio only) */}
+              {activeSource !== "youtube" && (
+                <div
+                  aria-hidden="true"
+                  className="absolute inset-y-0 left-0 rounded-full bg-white/10"
+                  style={{ width: `${bufferedPct}%` }}
+                />
+              )}
+              {/* Glow line under handle */}
+              <div
+                aria-hidden="true"
+                className="pointer-events-none absolute inset-x-0 -bottom-1 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity"
+              />
+
               <Slider
-                value={[currentTimeLocal]}
+                value={[isSeeking && pendingSeekRef.current != null ? pendingSeekRef.current : currentTimeLocal]}
                 max={timelineMax}
                 step={1}
-                className="w-full group [--track:linear-gradient(90deg,rgba(255,255,255,0.45),rgba(255,255,255,0.2))]"
-                onValueChange={async (value) => {
-                  await ensureAudioReady();
-                  handleSeek(value);
-                }}
+                className="
+                  w-full
+                  [--track:linear-gradient(90deg,rgba(255,255,255,0.55),rgba(255,255,255,0.25))]
+                  data-[orientation=horizontal]:h-2
+                  [&_[role=slider]]:h-4 [&_[role=slider]]:w-4 [&_[role=slider]]:rounded-full
+                  [&_[role=slider]]:shadow-lg [&_[role=slider]]:border [&_[role=slider]]:border-white/20
+                  [&_[role=slider]]:bg-white hover:[&_[role=slider]]:scale-110
+                  focus:[&_[role=slider]]:outline-none focus:[&_[role=slider]]:ring-2 focus:[&_[role=slider]]:ring-emerald-400/60
+                "
+                onValueChange={onSeekChange}
+                // @ts-ignore shadcn Slider supports onValueCommit
+                onValueCommit={onSeekCommit}
+                aria-label="Seek"
               />
-              <div className="pointer-events-none absolute inset-x-0 -bottom-1 h-px bg-gradient-to-r from-transparent via-white/30 to-transparent opacity-0 group-hover:opacity-100 transition-opacity" />
             </div>
+
             <div className="text-[11px] tabular-nums text-zinc-400 min-w-[32px]">
-              {formatTime(duration)}
+              {formatTime(timelineMax)}
             </div>
           </div>
 
-          {/* Compact mobile timeline */}
+          {/* Mobile timeline */}
           <div className="sm:hidden w-full">
             <Slider
               aria-label="Seek"
-              value={[currentTimeLocal]}
+              value={[isSeeking && pendingSeekRef.current != null ? pendingSeekRef.current : currentTimeLocal]}
               max={timelineMax}
               step={1}
               className="w-full"
-              onValueChange={async (value) => {
-                await ensureAudioReady();
-                handleSeek(value);
-              }}
+              onValueChange={onSeekChange}
+              // @ts-ignore
+              onValueCommit={onSeekCommit}
             />
           </div>
         </div>
@@ -354,7 +493,8 @@ export const PlaybackControls: React.FC = () => {
               toggleLyrics();
             }}
             className={`hover:text-white hover:bg-white/5 ${showLyrics ? "text-emerald-400" : "text-zinc-400"}`}
-            disabled={!currentSong}
+            disabled={!display || activeSource === "youtube"} // lyrics for library songs
+            title={activeSource === "youtube" ? "Lyrics only for library tracks" : undefined}
           >
             <Mic2 className="h-4 w-4" />
           </Button>
@@ -363,26 +503,37 @@ export const PlaybackControls: React.FC = () => {
             <ListMusic className="h-4 w-4" />
           </Button>
 
-          {/* UPDATED: this replaces the old “Connect device” behavior */}
+          {/* YouTube mini player toggle (Home only) */}
           <Button
-            aria-label={showYouTubeDock ? "Hide YouTube panel" : "Show YouTube panel"} // UPDATED
+            aria-label={showYouTubeDock ? "Hide YouTube panel" : "Show YouTube panel"}
             size="icon"
             variant="ghost"
-            className={`hover:text-white hover:bg-white/5 ${showYouTubeDock ? "text-emerald-400" : "text-zinc-400"}`} // UPDATED
-            onClick={toggleYouTubeDock}   // UPDATED
-            disabled={!onHome}            // UPDATED (Home only)
-            title={onHome ? "YouTube mini player" : "Open Home to use the YouTube panel"} // UPDATED
+            className={`hover:text-white hover:bg-white/5 ${showYouTubeDock ? "text-emerald-400" : "text-zinc-400"}`}
+            onClick={toggleDock}
+            disabled={!onHome}
+            title={onHome ? "YouTube mini player" : "Open Home to use the YouTube panel"}
           >
             <Laptop2 className="h-4 w-4" />
           </Button>
 
           {/* Volume */}
           <div className="flex items-center gap-2 group">
-            <Button aria-label="Volume" size="icon" variant="ghost" className="hover:text-white text-zinc-400 hover:bg-white/5">
+            <Button
+              aria-label="Volume"
+              size="icon"
+              variant="ghost"
+              className="hover:text-white text-zinc-400 hover:bg-white/5"
+            >
               <Volume1 className="h-4 w-4" />
             </Button>
             <div className="w-20 transition-[width] duration-200 ease-out group-hover:w-28">
-              <Slider value={[volume]} max={100} step={1} onValueChange={handleVolumeChange} />
+              <Slider
+                value={[volume]}
+                max={100}
+                step={1}
+                onValueChange={onVolumeChange}
+                aria-label="Volume"
+              />
             </div>
           </div>
         </div>

@@ -1,3 +1,4 @@
+// src/components/player/FullScreenPlayer.tsx
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { ChevronDown } from "lucide-react";
 import { Button } from "@/components/ui/button";
@@ -62,14 +63,37 @@ function averageCenterColor(img: HTMLImageElement) {
 
 export default function FullScreenPlayer() {
   const {
+    // source & tracks
+    activeSource,
     currentSong,
+    currentYouTube,
+
+    // playback / ui
     isFullScreen,
     toggleFullScreen,
     togglePlay,
     audioNodes,
     setDominantColor,
     dominantColor,
+
+    // universal seek + current time for arrow keys
+    seekTo,
+    currentTime,
   } = usePlayerStore();
+
+  // —— display fields unified for library & youtube
+  const displayTitle =
+    activeSource === "youtube" ? currentYouTube?.title : currentSong?.title;
+  const displayArtist =
+    activeSource === "youtube"
+      ? currentYouTube?.artist || "YouTube"
+      : currentSong?.artist;
+  const displayImage =
+    activeSource === "youtube" ? currentYouTube?.imageUrl : currentSong?.imageUrl;
+
+  const hasTrack =
+    (activeSource === "youtube" && !!currentYouTube) ||
+    (activeSource !== "youtube" && !!currentSong);
 
   const playerRef = useRef<HTMLDivElement>(null);
 
@@ -99,7 +123,7 @@ export default function FullScreenPlayer() {
     hideTimerRef.current = window.setTimeout(() => {
       if (!insideDockRef.current) {
         setDockVisible(false);
-        setCursorHidden(true); // ⬅️ hide cursor when dock hides
+        setCursorHidden(true);
       }
       hideTimerRef.current = null;
     }, HIDE_DELAY) as unknown as number;
@@ -110,7 +134,7 @@ export default function FullScreenPlayer() {
     showTimerRef.current = window.setTimeout(() => {
       clearTimers();
       setDockVisible(true);
-      setCursorHidden(false); // ⬅️ ensure cursor visible with dock
+      setCursorHidden(false);
     }, SHOW_DELAY) as unknown as number;
   };
 
@@ -118,7 +142,6 @@ export default function FullScreenPlayer() {
     if (!isFullScreen) return;
     lastPointerY.current = e.clientY;
 
-    // Any pointer move should show cursor immediately
     if (cursorHidden) setCursorHidden(false);
 
     if (rafRef.current) return;
@@ -184,16 +207,15 @@ export default function FullScreenPlayer() {
     if (!isFullScreen && document.fullscreenElement) exitFullScreen();
   }, [isFullScreen, exitFullScreen]);
 
-  /* ====== Accent color extraction ====== */
+  /* ====== Accent color extraction (works for both sources) ====== */
   useEffect(() => {
-    const url = currentSong?.imageUrl;
-    if (!url) {
+    if (!displayImage) {
       setDominantColor("20,20,20");
       return;
     }
     const img = new Image();
     img.crossOrigin = "anonymous";
-    img.src = url;
+    img.src = displayImage;
 
     img.onload = () => {
       try {
@@ -210,31 +232,39 @@ export default function FullScreenPlayer() {
     };
 
     img.onerror = () => setDominantColor("20,20,20");
-  }, [currentSong?.imageUrl, setDominantColor]);
+  }, [displayImage, setDominantColor]);
 
-  /* ====== Keyboard shortcuts (Space, ←/→) ====== */
+  /* ====== Keyboard shortcuts (Space, ←/→ via store.seekTo) ====== */
   useEffect(() => {
     if (!isFullScreen) return;
     const key = (e: KeyboardEvent) => {
       if (e.code === "Space") {
         e.preventDefault();
         togglePlay();
-        // interaction -> make cursor visible + show dock briefly
         setCursorHidden(false);
         setDockVisible(true);
       } else if (e.code === "ArrowRight") {
-        const a = audioNodes.audioElement;
-        if (a) a.currentTime = Math.min((a.currentTime || 0) + 5, a.duration || a.currentTime);
+        e.preventDefault();
+        if (typeof seekTo === "function") seekTo((currentTime || 0) + 5);
+        else {
+          const a = audioNodes.audioElement;
+          if (a) a.currentTime = Math.min((a.currentTime || 0) + 5, a.duration || a.currentTime);
+        }
       } else if (e.code === "ArrowLeft") {
-        const a = audioNodes.audioElement;
-        if (a) a.currentTime = Math.max((a.currentTime || 0) - 5, 0);
+        e.preventDefault();
+        if (typeof seekTo === "function") seekTo(Math.max((currentTime || 0) - 5, 0));
+        else {
+          const a = audioNodes.audioElement;
+          if (a) a.currentTime = Math.max((a.currentTime || 0) - 5, 0);
+        }
       }
     };
     window.addEventListener("keydown", key);
     return () => window.removeEventListener("keydown", key);
-  }, [isFullScreen, togglePlay, audioNodes.audioElement]);
+  }, [isFullScreen, togglePlay, audioNodes.audioElement, seekTo, currentTime]);
 
-  if (!isFullScreen || !currentSong) return null;
+  // Nothing to show
+  if (!isFullScreen || !hasTrack) return null;
 
   const rgb = useMemo(() => clampRGB(dominantColor), [dominantColor]);
   const bgSolid = `rgb(${rgb})`;
@@ -245,7 +275,7 @@ export default function FullScreenPlayer() {
       ref={playerRef}
       className={[
         "fixed inset-0 z-[70] flex items-center justify-center overflow-hidden",
-        cursorHidden ? "cursor-none" : "cursor-auto", // ⬅️ hide/show cursor
+        cursorHidden ? "cursor-none" : "cursor-auto",
       ].join(" ")}
     >
       {/* Solid accent background */}
@@ -272,15 +302,17 @@ export default function FullScreenPlayer() {
       <div className="relative z-10 w-full max-w-[980px] px-4">
         <div className="mx-auto flex flex-col items-center text-center gap-8">
           <img
-            src={currentSong.imageUrl}
-            alt={currentSong.title}
+            src={displayImage || "/placeholder.png"}
+            alt={displayTitle || "Now playing"}
             className="w-[280px] h-[280px] sm:w-[360px] sm:h-[360px] md:w-[420px] md:h-[420px] object-cover rounded-3xl shadow-[0_12px_60px_rgba(0,0,0,.55)] ring-1 ring-white/10"
           />
           <div className="max-w-3xl">
             <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
-              {currentSong.title}
+              {displayTitle || "Now playing"}
             </h2>
-            <p className="mt-2 text-zinc-100/90 text-xl">{currentSong.artist}</p>
+            {displayArtist && (
+              <p className="mt-2 text-zinc-100/90 text-xl">{displayArtist}</p>
+            )}
           </div>
         </div>
       </div>
@@ -290,7 +322,6 @@ export default function FullScreenPlayer() {
         visible={dockVisible}
         onMouseSafe={(inside) => {
           onMouseSafe(inside);
-          // cursor visible while interacting with dock
           setCursorHidden(!inside && !dockVisible);
         }}
       />

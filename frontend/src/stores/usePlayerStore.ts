@@ -1,3 +1,4 @@
+// src/stores/usePlayerStore.ts
 import { create } from "zustand";
 import { persist } from "zustand/middleware";
 import { Song } from "@/types";
@@ -6,10 +7,7 @@ import { useChatStore } from "./useChatStore";
 
 export type RepeatMode = "off" | "queue" | "one";
 
-interface SocketAuth {
-  userId: string;
-  [key: string]: any;
-}
+interface SocketAuth { userId: string; [key: string]: any; }
 
 export type AudioNodes = {
   audioElement?: HTMLAudioElement | null;
@@ -27,9 +25,37 @@ type PartyMeta = {
   audioUrl?: string | null;
 };
 
+type YouTubeTrack = {
+  kind: "youtube";
+  id: string;
+  videoId: string;
+  title: string;
+  artist?: string | null;
+  imageUrl?: string | null;
+  durationMs?: number | null;
+};
+
+type YTControl = {
+  loadAndPlay?: (id: string) => void;
+  play?: () => void;
+  pause?: () => void;
+  seek?: (t: number) => void;
+  setVolume?: (v: number) => void; // 0–100
+  getCurrentTime?: () => number;
+  getDuration?: () => number;
+} | null;
+
+type ActiveSource = "library" | "youtube";
+
 interface PlayerStore {
-  currentSong: Song | null;
+  // Sources / tracks
+  activeSource: ActiveSource;
+  currentSong: Song | null;           // library song
+  currentYouTube: YouTubeTrack | null; // youtube “track” meta
+
+  // Playback state
   isPlaying: boolean;
+  setIsPlaying: (v: boolean) => void; // ⬅️ NEW: allow external (YT) to drive playing state
   queue: Song[];
   currentIndex: number;
   isFullScreen: boolean;
@@ -38,24 +64,37 @@ interface PlayerStore {
   repeatMode: RepeatMode;
   dominantColor: string;
 
-  // UPDATED: UI flag for the right YouTube dock
-  showYouTubeDock: boolean;                // UPDATED
-  setShowYouTubeDock: (open: boolean) => void; // UPDATED
-  toggleYouTubeDock: () => void;           // UPDATED
+  // Dock UI
+  showYouTubeDock: boolean;
+  setShowYouTubeDock: (open: boolean) => void;
+  toggleYouTubeDock: () => void;
 
+  // Engines / nodes
   audioNodes: AudioNodes;
   setAudioNodes: (nodes: AudioNodes) => void;
 
-  // NEW: follower can mirror remote metadata quickly (UI only)
+  // YouTube control bridge
+  ytControl: YTControl;
+  setYouTubeControl: (c?: YTControl | undefined) => void;
+
+  // Progress helpers used by YT rAF
+  pushYouTubeProgress: (current: number, duration?: number) => void;
+
+  // Party follower helper
   setFromPartyMeta: (meta: PartyMeta) => void;
 
+  // Library controls
   initializeQueue: (songs: Song[]) => void;
   playAlbum: (songs: Song[], startIndex?: number) => void;
   setCurrentSong: (song: Song | null) => void;
-
   playSong: (song: Song) => Promise<void>;
   queueSong: (song: Song) => void;
 
+  // YouTube controls
+  playTrack: (yt: YouTubeTrack) => Promise<void>;
+  queueTrack: (_yt: YouTubeTrack) => void; // (placeholder for future queue UI)
+
+  // Common controls
   togglePlay: () => void;
   playNext: () => void;
   playPrevious: () => void;
@@ -64,14 +103,22 @@ interface PlayerStore {
   setCurrentTime: (time: number) => void;
   toggleRepeatMode: () => void;
   setDominantColor: (color: string) => void;
+
+  // Unified seek
+  seekTo?: (t: number) => void;
 }
 
 export const usePlayerStore = create<PlayerStore>()(
   persist(
     (set, get) => ({
+      // --------- state ----------
+      activeSource: "library",
       currentSong: null,
+      currentYouTube: null,
+
       queue: [],
       isPlaying: false,
+      setIsPlaying: (v) => set({ isPlaying: v }), // ⬅️ NEW
       currentIndex: -1,
       isFullScreen: false,
       showLyrics: false,
@@ -79,16 +126,23 @@ export const usePlayerStore = create<PlayerStore>()(
       repeatMode: "off",
       dominantColor: "20,20,20",
 
-      // UPDATED: default dock state
-      showYouTubeDock: false,                           // UPDATED
-      setShowYouTubeDock: (open) => set({ showYouTubeDock: open }), // UPDATED
-      toggleYouTubeDock: () => set((s) => ({ showYouTubeDock: !s.showYouTubeDock })), // UPDATED
+      showYouTubeDock: false,
+      setShowYouTubeDock: (open) => set({ showYouTubeDock: open }),
+      toggleYouTubeDock: () => set((s) => ({ showYouTubeDock: !s.showYouTubeDock })),
 
       audioNodes: {},
-      setAudioNodes: (nodes: AudioNodes) =>
+      setAudioNodes: (nodes) =>
         set((state) => ({ audioNodes: { ...state.audioNodes, ...nodes } })),
 
-      // --- NEW: merge remote (leader) metadata for follower UI ---
+      ytControl: null,
+      setYouTubeControl: (c) => set({ ytControl: c ?? null }),
+
+      // update store time from YT rAF
+      pushYouTubeProgress: (current, _duration) => {
+        set({ currentTime: current });
+      },
+
+      // --------- party mirror (library meta only) ----------
       setFromPartyMeta: (meta) => {
         const prev = (get().currentSong || {}) as any;
         const merged = {
@@ -107,7 +161,7 @@ export const usePlayerStore = create<PlayerStore>()(
           duration: meta.durationMs ?? prev.duration,
           audioUrl: meta.audioUrl ?? prev.audioUrl,
         };
-        set({ currentSong: merged as Song });
+        set({ currentSong: merged as Song, activeSource: "library" });
       },
 
       setCurrentTime: (time) => set({ currentTime: time }),
@@ -122,11 +176,13 @@ export const usePlayerStore = create<PlayerStore>()(
         });
       },
 
+      // --------- LIBRARY actions ----------
       initializeQueue: (songs) => {
         set({
           queue: songs,
           currentSong: get().currentSong || songs[0],
           currentIndex: get().currentIndex === -1 ? 0 : get().currentIndex,
+          activeSource: "library",
         });
       },
 
@@ -136,6 +192,7 @@ export const usePlayerStore = create<PlayerStore>()(
 
         axiosInstance.post("/activity/log-listen", { songId: (song as any)._id }).catch(() => {});
 
+        // activity
         const socket = useChatStore.getState().socket;
         if (socket?.auth) {
           const auth = socket.auth as SocketAuth;
@@ -145,6 +202,10 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
+        // pause YT if needed
+        get().ytControl?.pause?.();
+
+        // play audio element
         const audio =
           get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
@@ -157,7 +218,14 @@ export const usePlayerStore = create<PlayerStore>()(
           } catch {}
         }
 
-        set({ queue: songs, currentSong: song, currentIndex: startIndex, isPlaying: true });
+        set({
+          queue: songs,
+          currentSong: song,
+          currentIndex: startIndex,
+          isPlaying: true,
+          activeSource: "library",
+          currentYouTube: null,
+        });
       },
 
       setCurrentSong: (song) => {
@@ -167,6 +235,7 @@ export const usePlayerStore = create<PlayerStore>()(
           axiosInstance.post("/activity/log-listen", { songId: (song as any)._id }).catch(() => {});
         }
 
+        // activity
         const socket = useChatStore.getState().socket;
         if (socket?.auth) {
           const auth = socket.auth as SocketAuth;
@@ -176,8 +245,10 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
-        const songIndex = get().queue.findIndex((s) => (s as any)._id === (song as any)._id);
+        // pause YT
+        get().ytControl?.pause?.();
 
+        const songIndex = get().queue.findIndex((s) => (s as any)._id === (song as any)._id);
         const audio =
           get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
@@ -194,6 +265,8 @@ export const usePlayerStore = create<PlayerStore>()(
           currentSong: song,
           isPlaying: true,
           currentIndex: songIndex !== -1 ? songIndex : get().currentIndex,
+          activeSource: "library",
+          currentYouTube: null,
         });
       },
 
@@ -219,6 +292,9 @@ export const usePlayerStore = create<PlayerStore>()(
           });
         }
 
+        // pause YT
+        get().ytControl?.pause?.();
+
         const audio =
           get().audioNodes?.audioElement ??
           (document.getElementById("global-audio") as HTMLAudioElement | null);
@@ -241,6 +317,8 @@ export const usePlayerStore = create<PlayerStore>()(
           currentSong: song,
           currentIndex: idx === -1 ? 0 : idx,
           isPlaying: true,
+          activeSource: "library",
+          currentYouTube: null,
         });
       },
 
@@ -253,33 +331,72 @@ export const usePlayerStore = create<PlayerStore>()(
         if (!currentSong) get().playSong(song);
       },
 
+      // --------- YOUTUBE actions ----------
+      playTrack: async (yt) => {
+        // pause library audio
+        const audio =
+          get().audioNodes?.audioElement ??
+          (document.getElementById("global-audio") as HTMLAudioElement | null);
+        try { audio?.pause?.(); } catch {}
+
+        // load & play on YT
+        const ctrl = get().ytControl;
+        try {
+          ctrl?.loadAndPlay?.(yt.videoId);
+          ctrl?.play?.();
+        } catch {}
+
+        set({
+          currentYouTube: yt,
+          activeSource: "youtube",
+          isPlaying: true,
+        });
+      },
+
+      queueTrack: (_yt) => {
+        // You can maintain your own YT queue later; no-op for now.
+      },
+
+      // --------- common controls ----------
       togglePlay: () => {
         const willStartPlaying = !get().isPlaying;
-        const currentSong = get().currentSong;
+        const source = get().activeSource;
+
+        // activity
         const socket = useChatStore.getState().socket;
+        const lib = get().currentSong;
         if (socket?.auth) {
-          const auth = socket.auth as SocketAuth;
+          const auth = (socket.auth as SocketAuth);
           socket.emit("update_activity", {
             userId: auth.userId,
             activity:
-              willStartPlaying && currentSong
-                ? `Playing ${currentSong.title} by ${currentSong.artist}`
+              willStartPlaying && lib && source === "library"
+                ? `Playing ${lib.title} by ${lib.artist}`
+                : willStartPlaying && source === "youtube"
+                ? "Playing YouTube"
                 : "Idle",
           });
         }
 
-        const audio =
-          get().audioNodes?.audioElement ??
-          (document.getElementById("global-audio") as HTMLAudioElement | null);
-        if (audio) {
-          if (willStartPlaying) audio.play().catch(() => {});
-          else audio.pause();
+        if (source === "youtube") {
+          const yt = get().ytControl;
+          if (willStartPlaying) yt?.play?.(); else yt?.pause?.();
+        } else {
+          const audio =
+            get().audioNodes?.audioElement ??
+            (document.getElementById("global-audio") as HTMLAudioElement | null);
+          if (audio) {
+            if (willStartPlaying) audio.play().catch(() => {});
+            else audio.pause();
+          }
         }
 
         set({ isPlaying: willStartPlaying });
       },
 
       playNext: () => {
+        // Only for library queue
+        if (get().activeSource !== "library") return;
         const { currentIndex, queue, repeatMode } = get();
         const isLastSong = currentIndex === queue.length - 1;
 
@@ -319,10 +436,11 @@ export const usePlayerStore = create<PlayerStore>()(
           } catch {}
         }
 
-        set({ currentSong: nextSong, currentIndex: nextIndex, isPlaying: true });
+        set({ currentSong: nextSong, currentIndex: nextIndex, isPlaying: true, activeSource: "library" });
       },
 
       playPrevious: () => {
+        if (get().activeSource !== "library") return;
         const { currentIndex, queue } = get();
         const prevIndex = currentIndex - 1;
         if (prevIndex >= 0) {
@@ -351,7 +469,23 @@ export const usePlayerStore = create<PlayerStore>()(
             } catch {}
           }
 
-          set({ currentSong: prevSong, currentIndex: prevIndex, isPlaying: true });
+          set({ currentSong: prevSong, currentIndex: prevIndex, isPlaying: true, activeSource: "library" });
+        }
+      },
+
+      // unified seek
+      seekTo: (t: number) => {
+        if (get().activeSource === "youtube") {
+          get().ytControl?.seek?.(t);
+          set({ currentTime: t });
+        } else {
+          const audio =
+            get().audioNodes?.audioElement ??
+            (document.getElementById("global-audio") as HTMLAudioElement | null);
+          if (audio) {
+            audio.currentTime = t;
+            set({ currentTime: t });
+          }
         }
       },
     }),
