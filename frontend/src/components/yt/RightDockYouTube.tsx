@@ -297,10 +297,6 @@ function DockInner({
     else exec();
   };
 
-  const addToQueue = (_r: YTResult) => {
-    // Optional: implement a YT queue later
-  };
-
   const panelClasses = useMemo(
     () =>
       cn(
