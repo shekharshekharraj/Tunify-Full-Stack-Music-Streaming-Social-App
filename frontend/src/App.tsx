@@ -1,7 +1,7 @@
 // src/App.tsx
 import { Route, Routes, useLocation } from "react-router-dom";
 import { AuthenticateWithRedirectCallback } from "@clerk/clerk-react";
-import { Suspense, lazy } from "react";
+import { Suspense, lazy, useMemo } from "react";
 
 import MainLayout from "./layout/MainLayout";
 import HomePage from "./pages/home/HomePage";
@@ -17,6 +17,7 @@ import { Toaster } from "react-hot-toast";
 // Code-split heavier pages
 const AdminPage = lazy(() => import("./pages/admin/AdminPage"));
 const AuthCallbackPage = lazy(() => import("./pages/auth-callback/AuthCallbackPage"));
+// ✅ remove .tsx extension for better portability
 const AiChatPage = lazy(() => import("./pages/ai/AiChatPage.tsx"));
 const PartyRoom = lazy(() => import("./pages/party/PartyRoom"));
 const WhatsNew = lazy(() => import("./pages/WhatsNew"));
@@ -26,7 +27,12 @@ const YouTubeSearchPanel = lazy(() => import("@/pages/yt/YouTubeSearchPanel"));
 
 function App() {
   const location = useLocation();
-  const hideAiOverlay = location.pathname === "/chat" || location.pathname === "/ai";
+
+  // Hide the floating AI overlay on /chat and /ai (and their sub-routes)
+  const hideAiOverlay = useMemo(() => {
+    const p = location.pathname;
+    return p === "/chat" || p.startsWith("/chat/") || p === "/ai" || p.startsWith("/ai/");
+  }, [location.pathname]);
 
   return (
     <>

@@ -1,3 +1,4 @@
+// server/index.js
 import express from "express";
 import dotenv from "dotenv";
 import path, { dirname } from "path";
@@ -39,9 +40,10 @@ const PORT = process.env.PORT || 5000;
 app.set("trust proxy", 1);
 
 // ----- CORS -----
-const normalize = (u) => (u ? u.replace(/^['"]|['"]$/g, "").replace(/\/+$/, "") : u);
+const normalize = (u) =>
+  u ? u.replace(/^['"]|['"]$/g, "").replace(/\/+$/, "") : u;
 const FRONTEND_URL = normalize(process.env.FRONTEND_URL);
-const RENDER_URL   = normalize(process.env.RENDER_EXTERNAL_URL);
+const RENDER_URL = normalize(process.env.RENDER_EXTERNAL_URL);
 
 const allowedOriginsArr = [
   "http://localhost:3000",
@@ -67,8 +69,12 @@ const corsConfig = {
   credentials: true,
   methods: ["GET", "HEAD", "PUT", "PATCH", "POST", "DELETE", "OPTIONS"],
   allowedHeaders: [
-    "Origin", "Content-Type", "Authorization", "Cache-Control",
-    "X-Requested-With", "Accept",
+    "Origin",
+    "Content-Type",
+    "Authorization",
+    "Cache-Control",
+    "X-Requested-With",
+    "Accept",
   ],
   exposedHeaders: ["Set-Cookie"],
 };
@@ -76,51 +82,92 @@ const corsConfig = {
 app.use(cors(corsConfig));
 app.options("*", cors(corsConfig));
 
+// YT API routes early so CSP applies
 app.use("/api/yt", ytMusicRoute);
 
 // ----- Security / misc -----
 app.disable("x-powered-by");
 
-// ✅ CHANGED: Strong CSP that still allows YouTube embeds; also disable COEP
+// ✅ Helmet + CSP allowing YouTube + Clerk on Render
 app.use(
   helmet({
+    crossOriginEmbedderPolicy: false,
+    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" },
+    crossOriginResourcePolicy: { policy: "cross-origin" },
     contentSecurityPolicy: {
-      useDefaults: true,
+      useDefaults: false,
       directives: {
         "default-src": ["'self'"],
-        // YouTube iframe + possible Google domains used by YT
-        "frame-src": [
-          "'self'",
-          "https://www.youtube.com",
-          "https://www.youtube-nocookie.com",
-          "https://*.youtube.com",
-          "https://*.google.com",
-        ],
-        // If you ever load the IFrame API or YT scripts
+
         "script-src": [
           "'self'",
           "'unsafe-inline'",
+          "'unsafe-eval'", // remove if not needed
           "https://www.youtube.com",
           "https://s.ytimg.com",
           "https://*.google.com",
           "https://*.gstatic.com",
+          "https://*.clerk.com",
+          "https://*.accounts.dev",
         ],
-        "style-src": ["'self'", "'unsafe-inline'"],
-        // thumbnails, cloudinary artwork
+        "script-src-elem": [
+          "'self'",
+          "'unsafe-inline'",
+          "'unsafe-eval'",
+          "https://www.youtube.com",
+          "https://s.ytimg.com",
+          "https://*.google.com",
+          "https://*.gstatic.com",
+          "https://*.clerk.com",
+          "https://*.accounts.dev",
+        ],
+
+        "style-src": ["'self'", "'unsafe-inline'", "https://fonts.googleapis.com"],
+        "font-src": ["'self'", "https://fonts.gstatic.com", "data:"],
+
         "img-src": [
           "'self'",
           "data:",
           "blob:",
+          "https:",
           "https://i.ytimg.com",
           "https://*.ytimg.com",
+          "https://*.gstatic.com",
           "https://res.cloudinary.com",
         ],
-        "media-src": ["'self'", "blob:", "https://res.cloudinary.com"],
-        "connect-src": ["'self'", ...allowedOriginsArr, "https://www.youtube.com", "https://*.google.com"],
+        "media-src": ["'self'", "https:", "data:", "blob:", "https://res.cloudinary.com"],
+
+        "connect-src": [
+          "'self'",
+          ...allowedOriginsArr,
+          "https:",
+          "wss:",
+          "https://api.clerk.com",
+          "https://*.clerk.com",
+          "https://*.accounts.dev",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+          "https://*.googleapis.com",
+          "https://*.google.com",
+          "https://*.gstatic.com",
+        ],
+
+        "frame-src": [
+          "'self'",
+          "https://www.youtube.com",
+          "https://www.youtube-nocookie.com",
+          "https://*.google.com",
+          "https://*.clerk.com",
+          "https://*.accounts.dev",
+        ],
+
+        "worker-src": ["'self'", "blob:"],
+        "base-uri": ["'self'"],
+        "frame-ancestors": ["'self'"],
+        "object-src": ["'none'"],
+        "upgrade-insecure-requests": [],
       },
     },
-    crossOriginEmbedderPolicy: false, // ✅ IMPORTANT for YouTube iframe compatibility
-    crossOriginOpenerPolicy: { policy: "same-origin-allow-popups" }, // ✅ allow YT popup flows
   })
 );
 
@@ -128,15 +175,25 @@ app.use(process.env.NODE_ENV === "development" ? morgan("dev") : morgan("tiny"))
 app.use(compression());
 app.use(express.json({ limit: "10mb" }));
 
-app.use(fileUpload({
-  useTempFiles: true,
-  tempFileDir: path.join(__dirname, "../tmp"),
-  createParentPath: true,
-  limits: { fileSize: 10 * 1024 * 1024 },
-}));
+app.use(
+  fileUpload({
+    useTempFiles: true,
+    tempFileDir: path.join(__dirname, "../tmp"),
+    createParentPath: true,
+    limits: { fileSize: 10 * 1024 * 1024 },
+  })
+);
 
 // ----- Rate limiting (API only) -----
-app.use("/api", rateLimit({ windowMs: 15 * 60 * 1000, max: 1000, standardHeaders: true, legacyHeaders: false }));
+app.use(
+  "/api",
+  rateLimit({
+    windowMs: 15 * 60 * 1000,
+    max: 1000,
+    standardHeaders: true,
+    legacyHeaders: false,
+  })
+);
 
 // ----- Clerk -----
 app.use(clerkMiddleware());
