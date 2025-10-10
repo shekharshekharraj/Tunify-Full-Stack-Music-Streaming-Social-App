@@ -1,62 +1,44 @@
 // src/components/RightDockYouTube.tsx
 import { useEffect, useMemo, useRef, useState, useCallback } from "react";
-import { useLocation } from "react-router-dom";
+import { createPortal } from "react-dom";
 import { X, Youtube, Sparkles, Loader2, Play, Plus } from "lucide-react";
 import { usePlayerStore } from "@/stores/usePlayerStore";
 import { ytSearchApi, ytSuggestApi, YTResult } from "@/lib/ytmusic";
 import { cn } from "@/lib/utils";
-
-// All YT helpers from one place
 import {
   loadYouTubeAPI,
   buildPlayerVars,
   pickAndSanitizeId,
   isValidVideoId,
+  getBestYouTubeThumb,
 } from "@/lib/youtube";
 
-declare global {
-  interface Window {
-    YT: any;
-  }
-}
-
-/* ---------------- Display sanitizers (prevent React from crashing) ---------------- */
+/* ---------- Safe display helpers ---------- */
 function safeText(v: any): string {
   if (v == null) return "";
   if (typeof v === "string" || typeof v === "number") return String(v);
   if (Array.isArray(v)) return v.map(safeText).filter(Boolean).join(", ");
-  if (typeof v === "object") {
-    // common shapes: { name }, { title }, { text }
-    return v.name ?? v.title ?? v.text ?? "";
-  }
+  if (typeof v === "object") return v.name ?? v.title ?? v.text ?? "";
   return "";
 }
 function safeArtist(v: any): string {
   if (!v) return "";
   if (typeof v === "string") return v;
-  if (Array.isArray(v)) {
-    // could be array of strings or {name}
-    return v.map((x) => (typeof x === "string" ? x : x?.name ?? "")).filter(Boolean).join(", ");
-  }
+  if (Array.isArray(v)) return v.map((x) => (typeof x === "string" ? x : x?.name ?? "")).filter(Boolean).join(", ");
   if (typeof v === "object") return v.name ?? "";
   return "";
 }
 
 export default function RightDockYouTube() {
-  const { pathname } = useLocation();
-  const onHome = pathname === "/";
-
   const { showYouTubeDock, setShowYouTubeDock, currentSong } = usePlayerStore();
-
-  const seedQuery = (currentSong ? `${currentSong.title ?? ""} ${currentSong.artist ?? ""}` : "").trim();
-
-  if (!onHome) return null;
+  const seedQuery =
+    (currentSong ? `${currentSong.title ?? ""} ${currentSong.artist ?? ""}` : "").trim() || "believer";
 
   return (
     <DockInner
       open={showYouTubeDock}
       onClose={() => setShowYouTubeDock(false)}
-      seedQuery={seedQuery || "believer"}
+      seedQuery={seedQuery}
     />
   );
 }
@@ -75,7 +57,6 @@ function DockInner({
   const playerRef = useRef<any>(null);
   const [apiReady, setApiReady] = useState(false);
 
-  // Queue commands if user clicks before the iframe is ready
   const pendingCmds = useRef<Array<() => void>>([]);
   const drain = useCallback(() => {
     while (pendingCmds.current.length) {
@@ -88,7 +69,9 @@ function DockInner({
     setYouTubeControl,
     pushYouTubeProgress,
     playTrack,
-    setIsPlaying, // keep isPlaying in sync with iframe
+    setIsPlaying,
+    currentYouTube,
+    currentSong,
   } = usePlayerStore();
 
   const [q, setQ] = useState(seedQuery);
@@ -97,16 +80,21 @@ function DockInner({
   const [suggests, setSuggests] = useState<string[]>([]);
   const [currentVid, setCurrentVid] = useState<{ id: string; title?: string } | null>(null);
 
-  // for error-150 recovery: try next playable once per event
   const lastTriedIndexRef = useRef<number | null>(null);
   const tryingFallbackRef = useRef(false);
+  const AUTOPLAY_RELATED = true; // always on
 
-  // keep query in sync when panel opens
+  /* ---------- Seeds / defaults ---------- */
   useEffect(() => {
     if (open) setQ(seedQuery);
   }, [seedQuery, open]);
 
-  // ---------- Init YT API + player ONCE (keep alive even when dock is closed) ----------
+  useEffect(() => {
+    if (!currentSong && !q) setQ("believer");
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSong]);
+
+  /* ---------- IFrame API (kept alive even when dock hidden) ---------- */
   useEffect(() => {
     let cancelled = false;
     let ytInstance: any;
@@ -124,16 +112,12 @@ function DockInner({
             onReady: () => {
               if (cancelled) return;
               setApiReady(true);
-
-              // attach ref first so queued cmds can run
               playerRef.current = ytInstance;
 
-              // If a video is already selected, cue it (don’t restart)
               if (isValidVideoId(currentVid?.id)) {
                 try { ytInstance.cueVideoById(currentVid!.id); } catch {}
               }
 
-              // expose controls to the global store
               setYouTubeControl({
                 loadAndPlay: (id: string) => {
                   if (!isValidVideoId(id)) return console.warn("[YT] invalid id -> loadAndPlay ignored:", id);
@@ -151,23 +135,26 @@ function DockInner({
             },
             onStateChange: (ev: any) => {
               const state = ev?.data;
-
-              // Pause your global <audio> tag to prevent overlap
               if (state === 1 /* PLAYING */) {
                 const audio = document.getElementById("global-audio") as HTMLAudioElement | null;
-                audio?.pause?.();
+                audio?.pause?.(); // avoid overlap
                 setIsPlaying(true);
               }
-              if (state === 2 /* PAUSED */ || state === 0 /* ENDED */) {
+              if (state === 2 /* PAUSED */) {
                 setIsPlaying(false);
+              }
+              if (state === 0 /* ENDED */) {
+                setIsPlaying(false);
+                if (AUTOPLAY_RELATED) {
+                  void autoPlayNextRelated();
+                }
               }
             },
             onError: (e: any) => {
               console.warn("[YT] player error:", e);
               const code = e?.data;
-              // 150/101: owner disabled embedding / playback not allowed
               if ((code === 150 || code === 101) && !tryingFallbackRef.current) {
-                // try to pick next playable in current results
+                // try next playable from results if current is blocked
                 const currentIndex =
                   lastTriedIndexRef.current ??
                   (results.findIndex((r) => pickAndSanitizeId(r) === currentVid?.id) || 0);
@@ -179,7 +166,6 @@ function DockInner({
 
                 if (next?.id) {
                   tryingFallbackRef.current = true;
-                  console.warn("[YT] error 150/101, trying fallback:", next.id);
                   setCurrentVid({ id: next.id, title: safeText(next.r.title) });
                   try {
                     playerRef.current?.loadVideoById(next.id);
@@ -187,6 +173,9 @@ function DockInner({
                   } finally {
                     setTimeout(() => { tryingFallbackRef.current = false; }, 300);
                   }
+                } else if (AUTOPLAY_RELATED) {
+                  // if none in results, run radio fallback
+                  void autoPlayNextRelated();
                 }
               }
             },
@@ -198,8 +187,7 @@ function DockInner({
     })();
 
     return () => {
-      // Destroy only when component unmounts (NOT when panel is closed)
-      cancelled = true;
+      // Destroy when app leaves/unmounts
       setApiReady(false);
       setYouTubeControl(undefined);
       try { playerRef.current?.destroy?.(); } catch {}
@@ -208,9 +196,8 @@ function DockInner({
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [origin, setYouTubeControl]);
-  // ----------------------------------------------------------------------
 
-  // Progress pump (sync time into store for global seek bar) — keep running even when dock is hidden
+  /* ---------- Progress pump ---------- */
   useEffect(() => {
     let raf = 0;
     const tick = () => {
@@ -224,7 +211,7 @@ function DockInner({
     return () => cancelAnimationFrame(raf);
   }, [pushYouTubeProgress]);
 
-  // Do search (when opened first time or seed changes)
+  /* ---------- Search & Suggestions ---------- */
   const doSearch = useCallback(async (query = q) => {
     if (!query.trim()) return;
     setLoading(true);
@@ -232,7 +219,6 @@ function DockInner({
       const r = await ytSearchApi(query, "songs", 18);
       setResults(r);
 
-      // preselect first playable if nothing chosen yet (validate!)
       if (!currentVid) {
         const first = r.find((x) => isValidVideoId(pickAndSanitizeId(x)));
         const id = first ? pickAndSanitizeId(first) : null;
@@ -243,12 +229,10 @@ function DockInner({
     }
   }, [q, currentVid]);
 
-  // Kick a search when the dock opens and we have nothing yet
   useEffect(() => {
-    if (open && results.length === 0) void doSearch();
-  }, [open, results.length, doSearch]);
+    if (results.length === 0) void doSearch();
+  }, [results.length, doSearch]);
 
-  // suggestions
   useEffect(() => {
     let cancel = false;
     if (!q.trim()) {
@@ -259,7 +243,7 @@ function DockInner({
     return () => { cancel = true; };
   }, [q]);
 
-  // Clicking a search result: update store + ensure play after readiness
+  /* ---------- Play clicked result (HD art) ---------- */
   const playNow = async (r: YTResult) => {
     const vid = pickAndSanitizeId(r);
     if (!isValidVideoId(vid)) {
@@ -273,21 +257,26 @@ function DockInner({
     setCurrentVid({ id: vid!, title });
     lastTriedIndexRef.current = results.findIndex((x) => x === r);
 
-    // Reflect in global store (active source = youtube; pauses audio via store)
+    const hdThumb =
+      (await getBestYouTubeThumb(vid!)) ||
+      (r as any).coverUrl ||
+      (r as any).thumbnails?.[0]?.url ||
+      undefined;
+
     await playTrack({
       kind: "youtube",
       id: r.id,
       videoId: vid!,
       title,
       artist,
-      imageUrl: (r as any).coverUrl ?? (r as any).thumbnails?.[0]?.url,
+      imageUrl: hdThumb,
       durationMs: (r as any).durationMs ?? undefined,
     });
 
     const exec = () => {
       try {
         playerRef.current?.loadVideoById(vid!);
-        playerRef.current?.playVideo?.(); // user gesture: allowed
+        playerRef.current?.playVideo?.();
       } catch (e) {
         console.warn("[YT] Failed to play video", e);
       }
@@ -297,17 +286,69 @@ function DockInner({
     else exec();
   };
 
+  /* ---------- Auto-play “radio” when current video ends ---------- */
+  const autoPlayNextRelated = useCallback(async () => {
+    // 1) try the next item in the current results
+    const curId = currentYouTube?.videoId || currentVid?.id || null;
+    let curIdx = results.findIndex((r) => pickAndSanitizeId(r) === curId);
+    if (curIdx < 0) curIdx = lastTriedIndexRef.current ?? -1;
+
+    const candidateFromResults = results
+      .slice(curIdx + 1)
+      .map((r) => ({ id: pickAndSanitizeId(r), r }))
+      .find((x) => isValidVideoId(x.id));
+
+    if (candidateFromResults?.id) {
+      await playNow(candidateFromResults.r);
+      return;
+    }
+
+    // 2) fallback: ask YT for suggestions based on current title/artist
+    const seedTitle = currentYouTube?.title || currentVid?.title || "";
+    const seedArtist = currentYouTube?.artist || "";
+    const query = [seedTitle, seedArtist].filter(Boolean).join(" ").trim() || q || "music";
+
+    try {
+      const sug = await ytSuggestApi(query);
+      // search using first suggestion that yields playable results
+      for (const s of sug.slice(0, 5)) {
+        const res = await ytSearchApi(s, "songs", 18);
+        const playable = res.find((x) => isValidVideoId(pickAndSanitizeId(x)));
+        if (playable) {
+          setResults(res); // new list becomes our queue base
+          await playNow(playable);
+          return;
+        }
+      }
+    } catch (e) {
+      console.warn("[YT] radio fallback failed:", e);
+    }
+
+    // 3) ultimate fallback: reuse the current query
+    try {
+      const res = await ytSearchApi(query, "songs", 18);
+      const playable = res.find((x) => isValidVideoId(pickAndSanitizeId(x)));
+      if (playable) {
+        setResults(res);
+        await playNow(playable);
+      }
+    } catch (e) {
+      console.warn("[YT] radio ultimate fallback failed:", e);
+    }
+  }, [results, q, currentVid?.id, currentVid?.title, currentYouTube?.videoId, currentYouTube?.title, currentYouTube?.artist]);
+
+  /* ---------- UI / Panel ---------- */
   const panelClasses = useMemo(
     () =>
       cn(
-        "fixed right-3 top-[88px] z-40 w-[360px] lg:w-[400px]",
+        "fixed right-3 top-[88px] z-[100] w-[360px] lg:w-[400px]",
         "transition-[transform,opacity] duration-300",
         open ? "translate-x-0 opacity-100" : "translate-x-[110%] opacity-0 pointer-events-none"
       ),
     [open]
   );
 
-  return (
+  return createPortal(
     <aside aria-hidden={!open} className={panelClasses}>
       <div
         className={cn(
@@ -442,6 +483,7 @@ function DockInner({
           )}
         </div>
       </div>
-    </aside>
+    </aside>,
+    document.body
   );
 }

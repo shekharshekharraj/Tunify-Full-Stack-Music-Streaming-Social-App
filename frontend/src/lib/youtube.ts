@@ -118,3 +118,53 @@ export function pickAndSanitizeId(r: any): string | null {
   }
   return null;
 }
+
+/* ---------------- HD Thumbnail helpers ---------------- */
+
+/** Build the known best-order thumbnail candidates for a videoId. */
+export function buildYTThumbCandidates(videoId: string): string[] {
+  const base = `https://i.ytimg.com/vi/${encodeURIComponent(videoId)}`;
+  // Order matters — some videos don't have maxres
+  return [
+    `${base}/maxresdefault.jpg`, // ~1280x720+
+    `${base}/sddefault.jpg`,     // 640x480
+    `${base}/hqdefault.jpg`,     // 480x360
+    `${base}/mqdefault.jpg`,     // 320x180
+  ];
+}
+
+function preloadImage(url: string): Promise<boolean> {
+  return new Promise((resolve) => {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.decoding = "async";
+    img.onload = () => resolve((img.naturalWidth ?? 0) > 1);
+    img.onerror = () => resolve(false);
+    img.src = url;
+  });
+}
+
+// Small in-memory cache to avoid re-probing thumbnails we already found
+const bestThumbCache = new Map<string, string>();
+
+/**
+ * Returns the best available (highest-res) YouTube thumbnail URL for a given videoId.
+ * Tries maxres -> sd -> hq -> mq and resolves with the first that loads.
+ */
+export async function getBestYouTubeThumb(videoId: string): Promise<string | null> {
+  if (!isValidVideoId(videoId)) return null;
+  const cached = bestThumbCache.get(videoId);
+  if (cached) return cached;
+
+  const candidates = buildYTThumbCandidates(videoId);
+  for (const url of candidates) {
+    // Attempt to load the image; if it exists, stop and cache
+    // (i.ytimg.com serves 200 for some "missing" maxres with tiny 120x90; guard by naturalWidth)
+    const ok = await preloadImage(url);
+    if (ok) {
+      bestThumbCache.set(videoId, url);
+      return url;
+    }
+  }
+  return null;
+}

@@ -305,6 +305,10 @@ export default function FullScreenPlayer() {
             src={displayImage || "/placeholder.png"}
             alt={displayTitle || "Now playing"}
             className="w-[280px] h-[280px] sm:w-[360px] sm:h-[360px] md:w-[420px] md:h-[420px] object-cover rounded-3xl shadow-[0_12px_60px_rgba(0,0,0,.55)] ring-1 ring-white/10"
+            decoding="async"
+            loading="eager"
+            fetchPriority="high"
+            draggable={false}
           />
           <div className="max-w-3xl">
             <h2 className="text-4xl sm:text-5xl font-extrabold tracking-tight text-white drop-shadow-md">
