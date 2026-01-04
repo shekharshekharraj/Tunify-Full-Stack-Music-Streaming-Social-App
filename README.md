@@ -1,139 +1,72 @@
-# **Tunify — Full-Stack Music Streaming & Social App**
+🎵 Tunify — Full-Stack Music Streaming & Social Platform
 
-**Tunify** is a feature-rich full-stack music platform that blends a seamless global player with a real-time social layer. Stream songs, sync party rooms, chat live, sing with LRC lyrics, and get AI-assisted recommendations. Now with a **YouTube Mini Player dock** and a **YouTube Music Explorer** for instant discovery.
+A feature-rich music streaming platform that seamlessly blends immersive playback with real-time social experiences
 
-🔗 **Live Demo:** [[www.tunify.co.in](http://www.tunify.co.in)]
+Tunify is a modern, full-stack music application that combines a powerful global player with real-time social features. Stream music, host synchronized party rooms, engage in live chat, follow along with synchronized lyrics, and discover new music with AI-powered recommendations — all wrapped in a beautiful, responsive interface.
+🔗 Live Demo: www.tunify.co.in
 
----
+🌟 Overview
+Tunify transforms music streaming into a social experience. Whether you're enjoying music solo with synchronized lyrics, hosting a virtual party with real-time synchronized playback, or discovering new tracks through AI-powered recommendations, Tunify delivers a premium, feature-packed experience that rivals industry leaders.
+What Makes Tunify Special?
 
-## ✨ Key Highlights
+🎧 Persistent Global Player — Music never stops as you navigate through the app
+🎤 Synchronized Lyrics — Real-time LRC lyric display with auto-scrolling
+👥 Party Rooms — Ultra-low latency synchronized playback (<100ms) via WebRTC
+🤖 AI Assistant — Gemini-powered chatbot for personalized recommendations
+▶️ YouTube Integration — Mini player dock and dedicated music explorer
+💬 Social Features — Real-time friend activity, 1:1 messaging, and presence indicators
+🛠️ Admin Console — Complete content management with live editing capabilities
 
-* 🎵 **Global Persistent Player** — Play/pause, seek, skip, repeat (one/off), volume, keyboard shortcuts; works across the app.
-* 🖼️ **Immersive Now Playing** — Full-screen player with dynamic ambient background (ColorThief), smooth dock, cursor-hide logic.
-* 🎤 **Lyrics Sync (LRC)** — Auto-scrolling lyrics, active line highlight, mobile-friendly, quick ±sync nudges.
-* 👥 **Party Room** — Real-time synced playback with Socket.IO + WebRTC (<100 ms latency), presence, emoji bursts, and chat.
-* 🤖 **AI Chatbot (Gemini API)** — Conversational assistant for playlist curation, vibe mixes, and discovery prompts.
-* ▶️ **YouTube Mini Player (Dock)** — Slide-in **right-side mini player** 
-* 📰 **What’s New** — Live product updates with SSE; **demo fallback** (hardcoded updates) when backend isn’t available.
-* 💬 **Social Layer** — Friends’ “Listening to…” feed, 1:1 chat with delivery + unread counts.
-* 🛠️ **Admin Console** — Role-protected CRUD for songs/albums, Cloudinary uploads, live LRC editor.
-* 📱 **Responsive UI** — Tailwind + shadcn/ui; polished micro-interactions and accessible controls.
-* 🔐 **Security** — Clerk auth + RBAC, Helmet, rate limiting, and secure API design.
 
----
+✨ Core Features
+🎵 Audio Player & Playback
+Global Persistent Player
 
-## 🧩 Feature Details
+Seamless playback that persists across all routes and pages
+Full player controls: play/pause, seek, skip, shuffle, repeat modes (one/all/off)
+Volume control with mute toggle
+Queue management with drag-and-drop reordering
+Keyboard shortcuts for power users:
 
-### Player & Lyrics
+Space — Play/Pause
+←/→ — Seek ±5 seconds
+↑/↓ — Volume adjustment
+M — Mute/Unmute
 
-* Global `<audio id="global-audio">` keeps playback consistent across routes.
-* Keyboard: **Space** (play/pause), **←/→** (seek ±5s), **↑/↓** (volume).
-* Full-screen: ambient color wash, smart dock show/hide, cursor auto-hide.
-* LRC parser supports `mm:ss.xx / mm:ss.xxx`; word/line highlighting.
 
-### Discovery & Library
 
-* Home sections: Featured, Trending, Made For You; time-based greetings.
-* Clean album pages with consistent art/brand; independent scrolling for sidebars/content.
+Immersive Now Playing Experience
 
-### YouTube Integrations
+Full-screen player mode with dynamic ambient backgrounds
+ColorThief integration for adaptive color schemes from album artwork
+Smart UI elements:
 
-* **Mini Player Dock (Home only)**
+Auto-hiding cursor during idle periods
+Smooth dock transitions
+Context-aware control visibility
 
-  * Open via the player bar’s **device/TV icon** (top-right control cluster).
-  * Draggable/scrollable panel with max-height confinement.
-  * Uses **`https://www.youtube-nocookie.com/embed/{id}`** with `modestbranding=1`.
-  * Compact **suggestion chips**; clicking a result swaps the iFrame video.
-* **YouTube Music Explorer (`/yt`)**
 
-  * Tunify logo + “YouTube Music Explorer” hero.
-  * Tabs, gradient animations, skeletons, elegant results cards.
-  * Modal iFrame player (plays inline; no page leave).
+Mobile-optimized touch controls
 
-### Social / Live
 
-* Presence + activity: “Playing X by Y”.
-* Party Rooms: shared queue, live chat, reactions; leader/follower sync.
-* Optional activity updates via Socket.IO events.
+🎤 Lyrics Synchronization
 
-### What’s New
+LRC Format Support — Parses mm:ss.xx and mm:ss.xxx timestamps
+Auto-Scrolling — Active line always centered
+Visual Highlighting — Current line and word-level emphasis
+Manual Sync Adjustment — Quick ±0.5s nudge controls for fine-tuning
+Mobile-Friendly Layout — Responsive design optimized for all screen sizes
+Fallback Handling — Graceful degradation when lyrics unavailable
 
-* `/whats-new` page hits API first; **falls back to embedded DEMO_UPDATES** if API is down.
-* SSE endpoint (`/api/whats-new/stream`) for live inserts/edits when available.
 
-### Admin
+🎉 Party Rooms (Real-Time Sync)
+Transform listening into a shared experience with ultra-low latency synchronized playback.
+Technical Implementation
 
-* `/api/admin/is-admin` check (Clerk ID / allowlist email).
-* Cloudinary uploads, LRC editing, and stats.
-* Seed script for **What’s New** with `x-seed-key` header; PowerShell cURL or Node seeder.
-
----
-
-## 🛠 Tech Stack
-
-| Category     | Tech                                                                                         |
-| ------------ | -------------------------------------------------------------------------------------------- |
-| **Frontend** | React, TypeScript, Vite, Zustand (persist), Tailwind CSS, **shadcn/ui**, React Router, Axios |
-| **Backend**  | Node.js, Express, MongoDB (Mongoose), Socket.IO, Helmet, Morgan, Rate Limiting               |
-| **Auth**     | **Clerk** (Email + Google OAuth), RBAC                                                       |
-| **Storage**  | **Cloudinary** (audio/artwork)                                                               |
-| **AI**       | **Gemini API** (chatbot & recommendations)                                                   |
-| **Media**    | **YouTube iFrame** (`youtube-nocookie`), optional **ytmusic-api** for search/suggestions     |
-| **UX**       | ColorThief, LRC parser, SSE (EventSource)                                                    |
-
-> **Note on `ytmusic-api`:** used client-side as a scraper for search/suggestions. Expect occasional rate limits/captcha variance in production; we proxy/trim as needed.
-
----
-
-## 🚀 Deployment (Render)
-
-* **Platform**: Render (single web service serving API + static frontend).
-* **Build**: `npm run build` → backend serves `dist/`.
-* **Start**: `npm start`.
-* **Env Vars**
-
-  * `MONGODB_URI` — MongoDB Atlas
-  * `CLERK_SECRET_KEY`, `CLERK_PUBLISHABLE_KEY` — Clerk
-  * `CLOUDINARY_CLOUD_NAME`, `CLOUDINARY_API_KEY`, `CLOUDINARY_API_SECRET`
-  * `SEED_KEY` — for “What’s New” seeding
-  * `BASE_URL` — (optional) for seed scripts (defaults to `http://localhost:5000`)
-* **CSP & Embeds**
-  Helmet is configured with a relaxed media/frame policy for YouTube:
-
-  * Allow `frame-src https://www.youtube-nocookie.com https://www.youtube.com`.
-  * If you enable strict CSPs, ensure `img-src` allows YouTube thumbnails and Cloudinary.
-* **Autoplay**
-  Mobile/desktop browsers may block autoplay without a user gesture. We play after click/tap and keep **`playsinline=1`** on the iFrame.
-
----
-
-## 🔐 Security
-
-* Helmet (CSP, no-sniff), rate-limited APIs, Clerk JWT verification.
-* Socket.IO auth handshake validates Clerk identity (server side).
-* Admin role checks via server; probes use `no-store`.
-
----
-
-## 🧪 Developer Notes
-
-* **YouTube Mini Player Dock**
-
-  * Scrollable container with `max-h: calc(100vh - 120px)`; suggestion chips compact to avoid pushing results below the fold.
-  * Use the **player bar TV icon** to toggle on Home.
-* **What’s New**
-
-  * Seeder: `node scripts/seed-whatsnew.mjs` (reads `backend/src/seeds/whatsnew.json` by default).
-  * Fallback demo content is bundled in the frontend so the page never looks empty.
-* **Playback**
-
-  * Global `<audio>` is shared via Zustand; `resumeAudioContext` handles suspended contexts before play/seek/volume updates.
-
----
+Socket.IO + WebRTC — Sub-100ms synchronization
+Leader-Follower Architecture — Room host controls playback
 
 ## 📸 Screenshots
-
-> (Replace with your latest images)
 
 <img width="1918" height="906" alt="Now Playing" src="https://github.com/user-attachments/assets/72d6abc7-4192-4e00-aac0-f107fdfc9f0a" />
 <img width="1918" height="910" alt="Home & Feed" src="https://github.com/user-attachments/assets/cc08e2b7-7810-4e7c-a066-09df26868bcd" />
